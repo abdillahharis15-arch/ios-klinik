@@ -1,0 +1,451 @@
+// ================================================================
+//  SYNC.JS — Pustaka Sinkronisasi Database Google Sheets
+//  IOS — Informasi Obat dan Kesehatan
+//  Klinik Pratama Kelas I Palembang / Klinik Lapas & Rutan
+//
+//  Arsitektur: Offline-First
+//  Strategi  : Data selalu ditulis ke localStorage terlebih dahulu.
+//              Sinkronisasi ke Google Sheets dilakukan di latar belakang
+//              secara otomatis (auto-sync tiap 60 detik) atau manual.
+//
+//  Status    : ONLINE | OFFLINE | SYNCING | ERROR
+// ================================================================
+
+const SyncManager = (() => {
+
+  // ── Konfigurasi ────────────────────────────────────────────────
+  const CONFIG = {
+    GAS_URL_KEY   : 'ios_gas_url',    // key localStorage untuk URL Apps Script
+    QUEUE_KEY     : 'ios_sync_queue', // antrian perubahan lokal yang belum diupload
+    LOG_KEY       : 'ios_sync_log',   // riwayat sinkronisasi
+    META_KEY      : 'ios_sync_meta',  // metadata (last sync, version)
+    AUTO_INTERVAL : 60_000,           // interval auto-sync (ms) — 60 detik
+    MAX_RETRIES   : 3,                // maksimum percobaan ulang jika gagal
+    MAX_LOG       : 50,               // maksimum entri log yang disimpan
+    VERSION       : '1.0.0',
+  };
+
+  // ── State Internal ─────────────────────────────────────────────
+  let _status    = 'OFFLINE';   // ONLINE | OFFLINE | SYNCING | ERROR
+  let _timer     = null;        // referensi auto-sync timer
+  let _listeners = [];          // callback status change
+
+  // ── Helpers ────────────────────────────────────────────────────
+  function _getGasUrl() {
+    return localStorage.getItem(CONFIG.GAS_URL_KEY) || '';
+  }
+
+  function _getQueue() {
+    try { return JSON.parse(localStorage.getItem(CONFIG.QUEUE_KEY) || '[]'); }
+    catch { return []; }
+  }
+
+  function _saveQueue(q) {
+    localStorage.setItem(CONFIG.QUEUE_KEY, JSON.stringify(q));
+  }
+
+  function _getMeta() {
+    try { return JSON.parse(localStorage.getItem(CONFIG.META_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function _saveMeta(meta) {
+    localStorage.setItem(CONFIG.META_KEY, JSON.stringify(meta));
+  }
+
+  function _getSyncLog() {
+    try { return JSON.parse(localStorage.getItem(CONFIG.LOG_KEY) || '[]'); }
+    catch { return []; }
+  }
+
+  function _addLog(type, msg, detail = '') {
+    const log = _getSyncLog();
+    log.unshift({
+      id: Date.now(),
+      type,             // 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
+      msg,
+      detail,
+      ts: new Date().toLocaleString('id-ID')
+    });
+    if (log.length > CONFIG.MAX_LOG) log.length = CONFIG.MAX_LOG;
+    localStorage.setItem(CONFIG.LOG_KEY, JSON.stringify(log));
+  }
+
+  function _setStatus(s) {
+    _status = s;
+    _listeners.forEach(cb => { try { cb(s); } catch {} });
+    _updateStatusUI(s);
+  }
+
+  // ── Update Indikator Status di UI ──────────────────────────────
+  function _updateStatusUI(status) {
+    const el = document.getElementById('syncStatusBtn');
+    if (!el) return;
+
+    const icons = {
+      ONLINE  : 'ph-fill ph-cloud-check',
+      OFFLINE : 'ph-fill ph-cloud-slash',
+      SYNCING : 'ph ph-cloud-arrow-up sync-spin',
+      ERROR   : 'ph-fill ph-cloud-warning',
+    };
+    const colors = {
+      ONLINE  : 'var(--secondary)',
+      OFFLINE : 'var(--text-muted)',
+      SYNCING : 'var(--primary)',
+      ERROR   : 'var(--danger)',
+    };
+    const labels = {
+      ONLINE  : 'Tersinkronisasi',
+      OFFLINE : 'Mode Offline',
+      SYNCING : 'Menyinkronkan...',
+      ERROR   : 'Gagal Sinkron',
+    };
+
+    const q = _getQueue();
+    const qBadge = document.getElementById('syncQueueBadge');
+    if (qBadge) {
+      qBadge.textContent = q.length;
+      qBadge.style.display = q.length > 0 ? 'flex' : 'none';
+    }
+
+    el.innerHTML = `
+      <i class="${icons[status] || icons.OFFLINE}" style="color:${colors[status]};font-size:18px"></i>
+      <span class="sync-label">${labels[status]}</span>
+    `;
+    el.title = `Status Sinkronisasi: ${labels[status]}${q.length > 0 ? ` (${q.length} antrian)` : ''}`;
+  }
+
+  // ── Tambah ke Antrian Sinkronisasi ─────────────────────────────
+  /**
+   * Panggil ini setiap kali ada perubahan data lokal.
+   * @param {string} table   - 'obat' | 'pegawai' | 'log'
+   * @param {string} action  - 'upsert' | 'delete'
+   * @param {object} payload - data yang berubah
+   */
+  function enqueue(table, action, payload) {
+    const q = _getQueue();
+    // Jika sudah ada entri upsert untuk ID yang sama di antrian, timpa (de-dup)
+    if (action === 'upsert') {
+      const idx = q.findIndex(e => e.table === table && e.action === 'upsert' && e.payload.id === payload.id);
+      if (idx >= 0) { q[idx].payload = payload; q[idx].ts = Date.now(); }
+      else q.push({ table, action, payload, ts: Date.now(), retries: 0 });
+    } else {
+      q.push({ table, action, payload, ts: Date.now(), retries: 0 });
+    }
+    _saveQueue(q);
+    _updateStatusUI(_status === 'ONLINE' ? 'ONLINE' : 'OFFLINE');
+
+    // Coba push segera jika online
+    if (_status === 'ONLINE' || _getGasUrl()) {
+      setTimeout(() => push(), 500);
+    }
+  }
+
+  // ── Helper: JSONP Request (bypass CORS redirect) ──────────────
+  function _jsonp(url, timeout = 15000) {
+    return new Promise((resolve, reject) => {
+      const cbName = '_ios_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+      let timer;
+
+      window[cbName] = (data) => {
+        clearTimeout(timer);
+        script.remove();
+        delete window[cbName];
+        resolve(data);
+      };
+
+      timer = setTimeout(() => {
+        script.remove();
+        delete window[cbName];
+        reject(new Error('Request timeout'));
+      }, timeout);
+
+      const sep = url.includes('?') ? '&' : '?';
+      script.src = url + sep + 'callback=' + cbName;
+      script.onerror = () => {
+        clearTimeout(timer);
+        script.remove();
+        delete window[cbName];
+        reject(new Error('Network error'));
+      };
+      document.body.appendChild(script);
+    });
+  }
+
+  // ── PUSH — Unggah Antrian ke Google Sheets ─────────────────────
+  async function push() {
+    const url = _getGasUrl();
+    if (!url) {
+      _setStatus('OFFLINE');
+      return { ok: false, reason: 'no_url' };
+    }
+
+    const q = _getQueue();
+    if (q.length === 0) return { ok: true, synced: 0 };
+
+    _setStatus('SYNCING');
+    _addLog('INFO', `Mulai push ${q.length} perubahan ke Google Sheets`);
+
+    try {
+      // Encode data as URL parameter for JSONP GET (GAS POST has CORS issues)
+      const payload = encodeURIComponent(JSON.stringify({ action: 'push', queue: q }));
+      const data = await _jsonp(`${url}?action=push&payload=${payload}`);
+
+      if (data.status === 'ok') {
+        _saveQueue([]); // kosongkan antrian
+        const meta = _getMeta();
+        meta.lastPush = new Date().toISOString();
+        meta.pushCount = (meta.pushCount || 0) + 1;
+        _saveMeta(meta);
+        _setStatus('ONLINE');
+        _addLog('SUCCESS', `Push berhasil — ${q.length} item tersinkronisasi`, JSON.stringify(data));
+        return { ok: true, synced: q.length };
+      } else {
+        throw new Error(data.error || 'Response tidak valid');
+      }
+    } catch (err) {
+      // Tandai retries
+      const q2 = _getQueue().map(e => ({ ...e, retries: (e.retries || 0) + 1 }));
+      const failed = q2.filter(e => e.retries >= CONFIG.MAX_RETRIES);
+      const pending = q2.filter(e => e.retries < CONFIG.MAX_RETRIES);
+      _saveQueue(pending);
+      _setStatus('ERROR');
+      _addLog('ERROR', `Push gagal: ${err.message}`, `${failed.length} item dibuang setelah ${CONFIG.MAX_RETRIES}x retry`);
+      return { ok: false, reason: err.message };
+    }
+  }
+
+  // ── PULL — Ambil Data Terbaru dari Google Sheets ───────────────
+  async function pull() {
+    const url = _getGasUrl();
+    if (!url) {
+      _setStatus('OFFLINE');
+      return { ok: false, reason: 'no_url' };
+    }
+
+    _setStatus('SYNCING');
+    _addLog('INFO', 'Mengambil data terbaru dari Google Sheets...');
+
+    try {
+      const data = await _jsonp(`${url}?action=pull`);
+
+      if (data.status !== 'ok') throw new Error(data.error || 'Pull gagal');
+
+      // Perbarui localStorage dari data cloud jika tersedia
+      if (data.obat     && Array.isArray(data.obat))     localStorage.setItem('ios_obat',    JSON.stringify(data.obat));
+      if (data.pegawai  && Array.isArray(data.pegawai))  localStorage.setItem('ios_pegawai', JSON.stringify(data.pegawai));
+      if (data.log      && Array.isArray(data.log))      localStorage.setItem('ios_log',     JSON.stringify(data.log));
+
+      const meta = _getMeta();
+      meta.lastPull = new Date().toISOString();
+      meta.pullCount = (meta.pullCount || 0) + 1;
+      _saveMeta(meta);
+
+      _setStatus('ONLINE');
+      _addLog('SUCCESS', 'Pull berhasil — data lokal diperbarui dari Google Sheets');
+      return { ok: true, data };
+    } catch (err) {
+      _setStatus('ERROR');
+      _addLog('ERROR', `Pull gagal: ${err.message}`);
+      return { ok: false, reason: err.message };
+    }
+  }
+
+  // ── Ping — Cek Koneksi ─────────────────────────────────────────
+  async function ping() {
+    const url = _getGasUrl();
+    if (!url) { _setStatus('OFFLINE'); return false; }
+    try {
+      const data = await _jsonp(`${url}?action=ping`, 8000);
+      const ok   = data.status === 'ok';
+      _setStatus(ok ? 'ONLINE' : 'ERROR');
+      return ok;
+    } catch {
+      _setStatus('ERROR');
+      return false;
+    }
+  }
+
+  // ── Auto-Sync ──────────────────────────────────────────────────
+  function startAutoSync() {
+    stopAutoSync();
+    _timer = setInterval(async () => {
+      if (!_getGasUrl()) return;
+      const q = _getQueue();
+      if (q.length > 0) await push();
+      else await ping();
+    }, CONFIG.AUTO_INTERVAL);
+    _addLog('INFO', `Auto-sync diaktifkan (interval: ${CONFIG.AUTO_INTERVAL / 1000}s)`);
+  }
+
+  function stopAutoSync() {
+    if (_timer) { clearInterval(_timer); _timer = null; }
+  }
+
+  // ── Sync Penuh (Pull → Push) ───────────────────────────────────
+  async function syncAll() {
+    const pullResult = await pull();
+    if (pullResult.ok) await push();
+    return pullResult;
+  }
+
+  // ── Inisialisasi ───────────────────────────────────────────────
+  function init() {
+    const url = _getGasUrl();
+    _setStatus(url ? 'OFFLINE' : 'OFFLINE'); // akan di-update setelah ping
+    if (url) {
+      setTimeout(async () => {
+        await ping();
+        startAutoSync();
+      }, 2000);
+    }
+    _addLog('INFO', `SyncManager v${CONFIG.VERSION} diinisialisasi`, url ? `URL: ${url.substring(0, 40)}...` : 'Belum ada URL terdaftar');
+  }
+
+  // ── Subscribe Status ───────────────────────────────────────────
+  function onStatusChange(cb) {
+    _listeners.push(cb);
+  }
+
+  // ── Getter ─────────────────────────────────────────────────────
+  function getStatus()   { return _status; }
+  function getSyncLog()  { return _getSyncLog(); }
+  function getMeta()     { return _getMeta(); }
+  function getQueue()    { return _getQueue(); }
+
+  // ── Google Apps Script Template ────────────────────────────────
+  const GAS_TEMPLATE = `
+// =============================================================
+// Google Apps Script — IOS Database Bridge
+// Salin seluruh kode ini ke Google Apps Script (script.google.com)
+// Hubungkan ke Google Spreadsheet Anda, lalu Deploy sebagai Web App.
+//
+// Sheet yang diperlukan:
+//   - Sheet bernama "Obat"
+//   - Sheet bernama "Pegawai"
+//   - Sheet bernama "Log"
+// =============================================================
+
+const SS = SpreadsheetApp.getActiveSpreadsheet();
+
+function doGet(e) {
+  const action   = e.parameter.action || '';
+  const callback = e.parameter.callback || '';
+  let result;
+
+  if (action === 'ping') {
+    result = { status: 'ok', ts: new Date().toISOString() };
+  } else if (action === 'pull') {
+    result = pullData();
+  } else if (action === 'push') {
+    try {
+      const payload = JSON.parse(decodeURIComponent(e.parameter.payload || '{}'));
+      processQueue(payload.queue || []);
+      result = { status: 'ok', processed: (payload.queue || []).length };
+    } catch (err) {
+      result = { status: 'error', error: err.message };
+    }
+  } else {
+    result = { status: 'error', error: 'Unknown action' };
+  }
+
+  // JSONP support
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + JSON.stringify(result) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    if (body.action === 'push') {
+      processQueue(body.queue || []);
+      return json({ status: 'ok', processed: (body.queue || []).length });
+    }
+    return json({ status: 'error', error: 'Unknown action' });
+  } catch (err) {
+    return json({ status: 'error', error: err.message });
+  }
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function pullData() {
+  return {
+    status  : 'ok',
+    obat    : sheetToJson('Obat'),
+    pegawai : sheetToJson('Pegawai'),
+    log     : sheetToJson('Log'),
+  };
+}
+
+function sheetToJson(name) {
+  const sh = SS.getSheetByName(name);
+  if (!sh) return [];
+  const [headers, ...rows] = sh.getDataRange().getValues();
+  return rows.map(r => Object.fromEntries(headers.map((h, i) => [h, r[i]])));
+}
+
+function processQueue(queue) {
+  queue.forEach(({ table, action, payload }) => {
+    const name = capitalize(table);
+    const sh   = SS.getSheetByName(name) || SS.insertSheet(name);
+    if (action === 'upsert') upsertRow(sh, payload);
+    if (action === 'delete') deleteRow(sh, payload.id);
+  });
+}
+
+function upsertRow(sh, data) {
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  if (!headers[0]) { // Sheet kosong — buat header
+    const keys = Object.keys(data);
+    sh.getRange(1, 1, 1, keys.length).setValues([keys]);
+    sh.appendRow(Object.values(data));
+    return;
+  }
+  const allData = sh.getDataRange().getValues();
+  const idCol   = headers.indexOf('id');
+  const row     = allData.findIndex((r, i) => i > 0 && r[idCol] == data.id);
+  const values  = headers.map(h => data[h] !== undefined ? data[h] : '');
+  if (row >= 0) sh.getRange(row + 1, 1, 1, values.length).setValues([values]);
+  else sh.appendRow(values);
+}
+
+function deleteRow(sh, id) {
+  const data  = sh.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('id');
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][idCol] == id) { sh.deleteRow(i + 1); break; }
+  }
+}
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+`;
+
+  // ── Public API ─────────────────────────────────────────────────
+  return {
+    init,
+    push,
+    pull,
+    ping,
+    syncAll,
+    enqueue,
+    startAutoSync,
+    stopAutoSync,
+    onStatusChange,
+    getStatus,
+    getSyncLog,
+    getMeta,
+    getQueue,
+    GAS_TEMPLATE,
+    CONFIG,
+  };
+})();

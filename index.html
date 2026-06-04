@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="IOS - Informasi Obat dan Kesehatan, sistem informasi digital Klinik Pratama Kelas I Palembang" />
+  <title>IOS — Informasi Obat & Kesehatan | Klinik Pratama Kelas I Palembang</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <i class="ph-fill ph-first-aid-kit"></i>
+      </div>
+      <div class="logo-text">
+        <span class="logo-title">IOS</span>
+        <span class="logo-sub">Klinik Pratama Kelas I</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="nav-item active" id="nav-dashboard" onclick="navigate('dashboard')">
+        <i class="ph-fill ph-squares-four"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="#obat" class="nav-item" id="nav-obat" onclick="navigate('obat')">
+        <i class="ph-fill ph-pill"></i>
+        <span>Stok Obat</span>
+      </a>
+      <a href="#pegawai" class="nav-item" id="nav-pegawai" onclick="navigate('pegawai')">
+        <i class="ph-fill ph-users-three"></i>
+        <span>Data Pegawai</span>
+      </a>
+      <a href="#kesehatan" class="nav-item" id="nav-kesehatan" onclick="navigate('kesehatan')">
+        <i class="ph-fill ph-heart-pulse"></i>
+        <span>Info Kesehatan</span>
+      </a>
+      <a href="#laporan" class="nav-item" id="nav-laporan" onclick="navigate('laporan')">
+        <i class="ph-fill ph-chart-bar"></i>
+        <span>Laporan</span>
+      </a>
+      <a href="#pengaturan" class="nav-item" id="nav-pengaturan" onclick="navigate('pengaturan')">
+        <i class="ph-fill ph-gear-six"></i>
+        <span>Pengaturan</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar">A</div>
+        <div class="user-info">
+          <span class="user-name">Admin Klinik</span>
+          <span class="user-role">Super Admin</span>
+        </div>
+        <i class="ph ph-sign-out" style="margin-left:auto;cursor:pointer;opacity:0.6"></i>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="main-content">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+        <i class="ph ph-list"></i>
+      </button>
+      <div class="topbar-center" id="page-title">Dashboard</div>
+      <div class="topbar-right">
+        <div class="clock-widget" id="clock"></div>
+        <button class="dark-toggle" id="darkToggle" onclick="toggleDark()">
+          <i class="ph-fill ph-moon" id="darkIcon"></i>
+        </button>
+        <!-- SYNC STATUS INDICATOR -->
+        <div class="sync-status-btn" id="syncStatusBtn" onclick="handleSyncClick()" title="Status Sinkronisasi">
+          <i class="ph-fill ph-cloud-slash" style="color:var(--text-muted);font-size:18px"></i>
+          <span class="sync-label">Offline</span>
+          <span class="sync-queue-badge" id="syncQueueBadge" style="display:none">0</span>
+        </div>
+        <div class="notification-btn" onclick="toggleNotif()">
+          <i class="ph-fill ph-bell"></i>
+          <span class="notif-badge" id="notifBadge">3</span>
+        </div>
+        <div class="notif-dropdown" id="notifDropdown">
+          <div class="notif-header">Notifikasi</div>
+          <div class="notif-item warning">
+            <i class="ph-fill ph-warning"></i>
+            <div>
+              <strong>Amoxicillin</strong>
+              <span>Stok menipis — sisa 12 strip</span>
+            </div>
+          </div>
+          <div class="notif-item warning">
+            <i class="ph-fill ph-warning"></i>
+            <div>
+              <strong>Paracetamol 500mg</strong>
+              <span>Stok menipis — sisa 8 strip</span>
+            </div>
+          </div>
+          <div class="notif-item danger">
+            <i class="ph-fill ph-x-circle"></i>
+            <div>
+              <strong>Antasida Tablet</strong>
+              <span>Stok habis!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGES -->
+    <div class="page-container" id="page-container">
+      <!-- Content rendered by JS -->
+    </div>
+  </main>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+    <div class="modal-box" id="modalBox" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle">Modal</h3>
+        <button class="modal-close" onclick="closeModal()"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script src="sync.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
