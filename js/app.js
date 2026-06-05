@@ -84,18 +84,46 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(renderNotif, 800);
   setInterval(renderNotif, 60_000);
 
-  // Auto-pull data dari Sheets saat login
+  // Auto-sync saat login: PUSH dulu (data lokal), baru PULL (data remote)
+  // Urutan ini penting! Jika pull duluan, data lokal yang baru ditambah bisa hilang.
   if (currentRole === 'admin' && localStorage.getItem('ios_gas_url')) {
     setTimeout(async () => {
       try {
-        const r = await SyncManager.pull();
-        if (r.ok) {
+        const localPegawai = JSON.parse(localStorage.getItem('ios_pegawai') || '[]');
+        console.log(`[IOS Init] Data lokal pegawai saat login: ${localPegawai.length} records`);
+        
+        const pendingQueue = SyncManager.getQueue();
+        console.log(`[IOS Init] Antrian pending: ${pendingQueue.length} item`);
+        
+        // LANGKAH 1: Push dulu jika ada antrian
+        if (pendingQueue.length > 0) {
+          console.log('[IOS Init] AUTO-SYNC: Push data lokal ke Sheets terlebih dahulu...');
+          const pushResult = await SyncManager.push();
+          if (pushResult.ok) {
+            console.log(`[IOS Init] AUTO-PUSH SUCCESS: ${pushResult.synced} item diunggah.`);
+          } else {
+            console.warn('[IOS Init] AUTO-PUSH FAILED:', pushResult.reason, '— data lokal dipertahankan, skip pull.');
+            return; // Jangan pull jika push gagal, untuk menghindari overwrite data pending
+          }
+        }
+
+        // LANGKAH 2: Pull setelah push selesai (atau tidak ada yang perlu di-push)
+        console.log('[IOS Init] AUTO-SYNC: Mengambil data terbaru dari Sheets...');
+        const pullResult = await SyncManager.pull();
+        if (pullResult.ok) {
+          const afterPegawai = JSON.parse(localStorage.getItem('ios_pegawai') || '[]');
+          console.log(`[IOS Init] AUTO-PULL SUCCESS: data pegawai setelah merge = ${afterPegawai.length} records.`);
           showToast('☁️ Data berhasil disinkronkan dari Google Sheets!');
           navigate(currentPage, { skipPush: true });
           renderNotif();
+        } else {
+          console.warn('[IOS Init] AUTO-PULL FAILED:', pullResult.reason);
         }
-      } catch(e) { /* silent fail */ }
-    }, 1500);
+      } catch(e) {
+        console.error('[IOS Init] AUTO-SYNC ERROR:', e);
+        /* silent fail — tetap pakai data lokal */
+      }
+    }, 2000); // delay 2 detik untuk pastikan app siap
   }
 });
 

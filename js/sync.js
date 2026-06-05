@@ -126,11 +126,18 @@ const SyncManager = (() => {
     const q = _getQueue();
     // Jika sudah ada entri upsert untuk ID yang sama di antrian, timpa (de-dup)
     if (action === 'upsert') {
-      const idx = q.findIndex(e => e.table === table && e.action === 'upsert' && e.payload.id === payload.id);
-      if (idx >= 0) { q[idx].payload = payload; q[idx].ts = Date.now(); }
-      else q.push({ table, action, payload, ts: Date.now(), retries: 0 });
+      const idx = q.findIndex(e => e.table === table && e.action === 'upsert' && String(e.payload.id) === String(payload.id));
+      if (idx >= 0) {
+        q[idx].payload = payload;
+        q[idx].ts = Date.now();
+        console.log(`[IOS Sync] ENQUEUE UPDATE: table=${table}, id=${payload.id} (deduplicated in queue)`);
+      } else {
+        q.push({ table, action, payload, ts: Date.now(), retries: 0 });
+        console.log(`[IOS Sync] ENQUEUE ADD: table=${table}, action=${action}, id=${payload.id}, queue size=${q.length}`);
+      }
     } else {
       q.push({ table, action, payload, ts: Date.now(), retries: 0 });
+      console.log(`[IOS Sync] ENQUEUE DELETE: table=${table}, id=${payload.id}, queue size=${q.length}`);
     }
     _saveQueue(q);
     _updateStatusUI(_status === 'ONLINE' ? 'ONLINE' : 'OFFLINE');
@@ -197,12 +204,17 @@ const SyncManager = (() => {
     const isNative = (typeof google !== 'undefined' && google.script);
     if (!_getGasUrl() && !isNative) {
       _setStatus('OFFLINE');
+      console.warn('[IOS Sync] PUSH SKIP: tidak ada URL GAS terdaftar.');
       return { ok: false, reason: 'no_url' };
     }
 
     const q = _getQueue();
-    if (q.length === 0) return { ok: true, synced: 0 };
+    if (q.length === 0) {
+      console.log('[IOS Sync] PUSH SKIP: antrian kosong, tidak ada yang di-push.');
+      return { ok: true, synced: 0 };
+    }
 
+    console.log(`[IOS Sync] PUSH START: mengunggah ${q.length} item ke Google Sheets...`);
     _setStatus('SYNCING');
     _addLog('INFO', `Mulai push ${q.length} perubahan ke Google Sheets`);
 
@@ -210,50 +222,117 @@ const SyncManager = (() => {
       const data = await apiCall('push', q);
 
       if (data.status === 'ok') {
-        _saveQueue([]); // kosongkan antrian
+        _saveQueue([]); // kosongkan antrian setelah konfirmasi server
         const meta = _getMeta();
         meta.lastPush = new Date().toISOString();
         meta.pushCount = (meta.pushCount || 0) + 1;
         _saveMeta(meta);
         _setStatus('ONLINE');
+        console.log(`[IOS Sync] PUSH SUCCESS: ${q.length} item berhasil diunggah ke Sheets.`, data);
         _addLog('SUCCESS', `Push berhasil — ${q.length} item tersinkronisasi`, JSON.stringify(data));
         return { ok: true, synced: q.length };
       } else {
-        throw new Error(data.error || 'Response tidak valid');
+        throw new Error(data.error || 'Response tidak valid dari server');
       }
     } catch (err) {
-      // Tandai retries
+      // Tandai retries — buang yang sudah melebihi batas
       const q2 = _getQueue().map(e => ({ ...e, retries: (e.retries || 0) + 1 }));
       const failed = q2.filter(e => e.retries >= CONFIG.MAX_RETRIES);
       const pending = q2.filter(e => e.retries < CONFIG.MAX_RETRIES);
       _saveQueue(pending);
       _setStatus('ERROR');
+      console.error(`[IOS Sync] PUSH FAILED: ${err.message}. ${failed.length} item dibuang, ${pending.length} item akan dicoba ulang.`);
       _addLog('ERROR', `Push gagal: ${err.message}`, `${failed.length} item dibuang setelah ${CONFIG.MAX_RETRIES}x retry`);
       return { ok: false, reason: err.message };
     }
   }
 
-  // ── PULL — Ambil Data Terbaru dari Google Sheets ───────────────
+  // ── PULL — Ambil & MERGE Data dari Google Sheets ───────────────
+  // PENTING: Pull TIDAK PERNAH menghapus data lokal secara langsung.
+  // Strategi: merge remote (Sheets) dengan local (localStorage).
+  // Data lokal yang lebih baru (ada di queue pending) dipertahankan.
   async function pull() {
     const isNative = (typeof google !== 'undefined' && google.script);
     if (!_getGasUrl() && !isNative) {
       _setStatus('OFFLINE');
+      console.warn('[IOS Sync] PULL SKIP: tidak ada URL GAS terdaftar.');
       return { ok: false, reason: 'no_url' };
     }
 
     _setStatus('SYNCING');
+    console.log('[IOS Sync] PULL START: mengambil data dari Google Sheets...');
     _addLog('INFO', 'Mengambil data terbaru dari Google Sheets...');
 
     try {
-      const data = await apiCall('pull');
+      const remote = await apiCall('pull');
 
-      if (data.status !== 'ok') throw new Error(data.error || 'Pull gagal');
+      if (remote.status !== 'ok') throw new Error(remote.error || 'Pull gagal');
 
-      // Perbarui localStorage dari data cloud jika tersedia
-      if (data.obat      && Array.isArray(data.obat))      localStorage.setItem('ios_obat',      JSON.stringify(data.obat));
-      if (data.pegawai   && Array.isArray(data.pegawai))   localStorage.setItem('ios_pegawai',   JSON.stringify(data.pegawai));
-      if (data.log       && Array.isArray(data.log))       localStorage.setItem('ios_log',       JSON.stringify(data.log));
-      if (data.kesehatan && Array.isArray(data.kesehatan)) localStorage.setItem('ios_kesehatan', JSON.stringify(data.kesehatan));
+      // Ambil ID item yang ada di antrian pending (belum di-push)
+      // Item ini JANGAN ditimpa oleh remote data
+      const pendingQueue = _getQueue();
+      const pendingIds = new Set(
+        pendingQueue
+          .filter(e => e.action === 'upsert')
+          .map(e => String(e.payload.id))
+      );
+      const deletedIds = new Set(
+        pendingQueue
+          .filter(e => e.action === 'delete')
+          .map(e => String(e.payload.id))
+      );
+
+      // Fungsi merge per tabel
+      function mergeTable(key, remoteArr) {
+        if (!remoteArr || !Array.isArray(remoteArr)) return;
+        
+        const localArr = (() => {
+          try { return JSON.parse(localStorage.getItem('ios_' + key) || '[]'); }
+          catch { return []; }
+        })();
+
+        const localMap = new Map(localArr.map(item => [String(item.id), item]));
+        const remoteMap = new Map(remoteArr.map(item => [String(item.id), item]));
+
+        const merged = [];
+        const remoteCount = remoteArr.length;
+
+        // Tambahkan semua item remote, kecuali yang ada di pending queue
+        remoteArr.forEach(remoteItem => {
+          const id = String(remoteItem.id);
+          if (deletedIds.has(id)) {
+            // Item ini sedang di-queue untuk dihapus → skip dari remote
+            console.log(`[IOS Sync] MERGE [${key}]: item id=${id} SKIP (ada di delete queue)`);
+            return;
+          }
+          if (pendingIds.has(id)) {
+            // Item ini di-queue untuk di-update → pakai versi lokal yang lebih baru
+            const localItem = localMap.get(id);
+            console.log(`[IOS Sync] MERGE [${key}]: item id=${id} PAKAI LOKAL (ada di pending queue)`);
+            merged.push(localItem || remoteItem);
+          } else {
+            merged.push(remoteItem);
+          }
+        });
+
+        // Tambahkan item lokal yang TIDAK ada di remote (baru dibuat, belum di-push)
+        localArr.forEach(localItem => {
+          const id = String(localItem.id);
+          if (!remoteMap.has(id) && !deletedIds.has(id)) {
+            console.log(`[IOS Sync] MERGE [${key}]: item id=${id} DITAMBAHKAN dari lokal (belum ada di Sheets)`);
+            merged.push(localItem);
+          }
+        });
+
+        console.log(`[IOS Sync] MERGE [${key}]: remote=${remoteCount}, lokal=${localArr.length}, hasil=${merged.length}`);
+        localStorage.setItem('ios_' + key, JSON.stringify(merged));
+      }
+
+      // Jalankan merge untuk semua tabel
+      mergeTable('obat',      remote.obat);
+      mergeTable('pegawai',   remote.pegawai);
+      mergeTable('log',       remote.log);
+      mergeTable('kesehatan', remote.kesehatan);
 
       const meta = _getMeta();
       meta.lastPull = new Date().toISOString();
@@ -261,10 +340,12 @@ const SyncManager = (() => {
       _saveMeta(meta);
 
       _setStatus('ONLINE');
-      _addLog('SUCCESS', 'Pull berhasil — data lokal diperbarui dari Google Sheets');
-      return { ok: true, data };
+      console.log('[IOS Sync] PULL SUCCESS: data berhasil di-merge dari Google Sheets.');
+      _addLog('SUCCESS', 'Pull & merge berhasil — data lokal diperbarui dengan aman dari Google Sheets');
+      return { ok: true, data: remote };
     } catch (err) {
       _setStatus('ERROR');
+      console.error(`[IOS Sync] PULL FAILED: ${err.message}`);
       _addLog('ERROR', `Pull gagal: ${err.message}`);
       return { ok: false, reason: err.message };
     }

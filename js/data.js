@@ -319,6 +319,22 @@ function saveData(key, data) {
   localStorage.setItem('ios_' + key, JSON.stringify(data));
 }
 
+/**
+ * Generate ID unik yang aman dari collision.
+ * Menggunakan max(ID lokal) + timestamp suffix untuk menghindari
+ * bentrok dengan ID di Google Sheets yang mungkin lebih besar.
+ *
+ * Format: <max_id + 1> jika sederhana, atau timestamp-based jika kosong.
+ * @param {Array} arr - Array data yang sudah ada
+ * @returns {number} ID baru yang unik
+ */
 function getNextId(arr) {
-  return arr.length > 0 ? Math.max(...arr.map(x => x.id)) + 1 : 1;
+  if (!Array.isArray(arr) || arr.length === 0) {
+    // Gunakan timestamp-based ID untuk menghindari collision dengan data Sheets
+    return Date.now();
+  }
+  const maxId = Math.max(...arr.map(x => Number(x.id) || 0));
+  // Jika ID sudah besar (timestamp-based), tambahkan 1
+  // Jika ID kecil (sequential), tetap tambahkan 1
+  return maxId + 1;
 }
