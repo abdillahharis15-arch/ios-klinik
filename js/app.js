@@ -237,7 +237,7 @@ function renderSidebarFooter() {
           <i class="ph-fill ph-first-aid-kit"></i>
         </div>
         <div class="user-info">
-          <span class="user-name" style="font-size:12px">Klinik Pratama Kelas I</span>
+          <span class="user-name" style="font-size:12px">Klinik Pratama Lapas Kelas I</span>
           <span class="user-role">Palembang</span>
         </div>
       </div>
@@ -312,7 +312,7 @@ function showLoginPage() {
       <!-- Footer -->
       <div class="login-card-footer">
         <i class="ph-fill ph-shield-check"></i>
-        Klinik Pratama Kelas I Palembang &middot; Kemenimipas
+        Klinik Pratama Lapas Kelas I Palembang &middot; Kemenimipas
       </div>
     </div>
   `;
@@ -751,7 +751,7 @@ function renderWelcome() {
           <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; border:1px solid rgba(255,255,255,0.3)">Inovasi Digital Klinik</span>
           <h1 style="font-size:36px; font-weight:800; margin:16px 0 8px 0; font-family:'Poppins', sans-serif">Selamat Datang di IOS</h1>
           <p style="font-size:15px; opacity:0.95; max-width:650px; line-height:1.6; font-weight:400">
-            Sistem Informasi Obat dan Kesehatan — persembahan inovasi digital dari <b>peserta MagangHub Divisi Klinik</b> untuk optimalisasi pelayanan medis di Klinik Pratama Kelas I Palembang / Lapas & Rutan.
+            Sistem Informasi Obat dan Kesehatan — persembahan inovasi digital dari <b>peserta MagangHub Divisi Klinik</b> untuk optimalisasi pelayanan medis di Klinik Pratama Lapas Kelas I Palembang / Lapas & Rutan.
           </p>
           <button class="btn btn-primary" onclick="navigate('${currentRole === 'admin' ? 'dashboard' : 'obat'}')" style="margin-top:24px; padding:12px 28px; background:white; color:#0f172a; font-weight:700; border-radius:var(--radius-sm); border:none; box-shadow:0 10px 20px rgba(0,0,0,0.15)">
             Mulai Jelajahi <i class="ph ph-arrow-right" style="margin-left:6px;font-weight:700"></i>
@@ -836,7 +836,7 @@ function renderWelcome() {
 
       <!-- FOOTER KREDIT -->
       <div style="text-align:center; color:var(--text-dim); font-size:11px; margin-top:10px">
-        © 2026 IOS App · MagangHub Divisi Klinik Pratama Kelas I Palembang · Kemenimipas
+        © 2026 IOS App · MagangHub Divisi Klinik Pratama Lapas Kelas I Palembang · Kemenimipas
       </div>
 
     </div>
@@ -1048,7 +1048,7 @@ function renderDashboard() {
     <div class="page-header">
       <div>
         <h1>👋 ${isHtmlAdmin ? 'Selamat Datang, Admin!' : 'Selamat Datang di IOS!'}</h1>
-        <p>${isHtmlAdmin ? 'Ringkasan aktivitas Klinik Pratama Kelas I Palembang hari ini' : 'Sistem Informasi Digital Obat & Kesehatan Klinik Pratama Kelas I Palembang'}</p>
+        <p>${isHtmlAdmin ? 'Ringkasan aktivitas Klinik Pratama Lapas Kelas I Palembang hari ini' : 'Sistem Informasi Digital Obat & Kesehatan Klinik Pratama Lapas Kelas I Palembang'}</p>
       </div>
     </div>
 
@@ -2200,7 +2200,7 @@ function renderPengaturan() {
       <div class="form-row">
         <div class="form-group">
           <label>Nama Fasilitas Kesehatan</label>
-          <input class="form-control" id="kNama" value="Klinik Pratama Kelas I Lapas Palembang" />
+          <input class="form-control" id="kNama" value="Klinik Pratama Lapas Kelas I Palembang" />
         </div>
         <div class="form-group">
           <label>No. Telepon</label>

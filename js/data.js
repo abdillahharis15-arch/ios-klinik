@@ -1,6 +1,6 @@
 // ================================================================
 //  DATA.JS — Database Lokal IOS
-//  Klinik Pratama Kelas I Lapas / Rutan Palembang
+//  Klinik Pratama Lapas Kelas I Palembang
 //
 //  Arsitektur  : Offline-First (localStorage + Google Sheets sync)
 //  Konteks     : Kedokteran Pemasyarakatan
