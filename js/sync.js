@@ -320,7 +320,7 @@ const SyncManager = (() => {
         startAutoSync();
       }, 2000);
     }
-    _addLog('INFO', `SyncManager v${CONFIG.VERSION} diinisialisasi`, (isNative ? 'Mode NATIVE Apps Script' : (url ? \`URL: \${url.substring(0, 40)}...\` : 'Belum ada URL terdaftar')));
+    _addLog('INFO', `SyncManager v${CONFIG.VERSION} diinisialisasi`, (isNative ? 'Mode NATIVE Apps Script' : (url ? 'URL: ' + url.substring(0, 40) + '...' : 'Belum ada URL terdaftar')));
   }
 
   // ── Subscribe Status ───────────────────────────────────────────
