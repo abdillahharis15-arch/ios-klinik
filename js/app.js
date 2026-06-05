@@ -576,7 +576,7 @@ function renderWelcome() {
     <div class="welcome-container" style="display:flex;flex-direction:column;gap:30px;max-width:1000px;margin:0 auto;padding-bottom:40px">
       
       <!-- HERO BANNER -->
-      <div class="welcome-hero" style="background: linear-gradient(135deg, rgba(14,165,233,0.8), rgba(16,185,129,0.8)), url('./bg-klinik.jpeg') center/cover; padding: 50px 40px; border-radius: var(--radius); color: white; position: relative; overflow: hidden; box-shadow: var(--shadow-lg);">
+      <div class="welcome-hero" style="background: linear-gradient(135deg, rgba(14,165,233,0.8), rgba(16,185,129,0.8)), url('./assets/images/bg-klinik.jpeg') center/cover; padding: 50px 40px; border-radius: var(--radius); color: white; position: relative; overflow: hidden; box-shadow: var(--shadow-lg);">
         <div style="position:relative; z-index:2">
           <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; border:1px solid rgba(255,255,255,0.3)">Inovasi Digital Klinik</span>
           <h1 style="font-size:36px; font-weight:800; margin:16px 0 8px 0; font-family:'Poppins', sans-serif">Selamat Datang di IOS</h1>
@@ -655,7 +655,7 @@ function renderWelcome() {
 
       <!-- TIM MAGANGHUB -->
       <div class="card welcome-info-card" style="display:flex; flex-direction:column; gap:16px; overflow:hidden; padding:0; border-radius:var(--radius); border:1px solid var(--border)">
-        <img src="./tim-magang.jpg" alt="Tim MagangHub" style="width:100%; height:380px; object-fit:cover; object-position:center 20%; border-bottom:1px solid var(--border)">
+        <img src="./assets/images/tim-magang.jpg" alt="Tim MagangHub" style="width:100%; height:380px; object-fit:cover; object-position:center 20%; border-bottom:1px solid var(--border)">
         <div style="padding:24px; padding-top:8px">
           <h3 style="font-size:20px; font-weight:700; margin-bottom:8px">Dipersembahkan oleh Tim MagangHub</h3>
           <p style="font-size:14px; color:var(--text-muted); line-height:1.6">
