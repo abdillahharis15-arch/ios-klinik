@@ -1419,12 +1419,21 @@ function showFormTambahPegawai(pegawaiData = null) {
   openModal(isEdit ? 'Edit Data Pegawai' : 'Tambah Pegawai Baru', `
     <div style="display:flex; justify-content:center; margin-bottom:20px; flex-direction:column; align-items:center; gap:10px">
       <input type="hidden" id="pFotoBase64" value="${p.foto || ''}">
-      <img id="pFotoPreview" src="${p.foto || ''}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:${p.foto ? 'block' : 'none'};border:2px solid var(--primary)">
-      <div id="pFotoPlaceholder" style="width:80px;height:80px;border-radius:50%;background:var(--surface);display:${p.foto ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:24px;color:var(--text-muted);border:2px dashed var(--border)">
-        <i class="ph ph-camera"></i>
-      </div>
-      <label class="btn btn-secondary btn-sm" style="cursor:pointer">
-        <i class="ph ph-upload-simple"></i> Upload Foto
+      
+      <label style="cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:10px;">
+        <!-- Preview Foto -->
+        <img id="pFotoPreview" src="${p.foto || ''}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:${p.foto ? 'block' : 'none'};border:2px solid var(--primary)">
+        
+        <!-- Placeholder Kamera -->
+        <div id="pFotoPlaceholder" style="width:80px;height:80px;border-radius:50%;background:var(--surface);display:${p.foto ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:24px;color:var(--text-muted);border:2px dashed var(--border); transition:0.2s">
+          <i class="ph ph-camera"></i>
+        </div>
+        
+        <!-- Tombol Upload -->
+        <div class="btn btn-secondary btn-sm">
+          <i class="ph ph-upload-simple"></i> Upload Foto
+        </div>
+        
         <input type="file" accept="image/*" style="display:none" onchange="handlePegawaiFotoUpload(event)">
       </label>
     </div>
