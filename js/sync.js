@@ -503,41 +503,89 @@ function pullData() {
 function sheetToJson(name) {
   const sh = SS.getSheetByName(name);
   if (!sh) return [];
-  const [headers, ...rows] = sh.getDataRange().getValues();
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  // Sheet kosong atau hanya ada header
+  if (lastRow < 1 || lastCol < 1) return [];
+  const allValues = sh.getDataRange().getValues();
+  if (allValues.length < 2) return []; // tidak ada data row
+  const headers = allValues[0];
+  const rows = allValues.slice(1);
   return rows.map(r => Object.fromEntries(headers.map((h, i) => [h, r[i]])));
 }
 
 function processQueue(queue) {
   queue.forEach(({ table, action, payload }) => {
-    const name = capitalize(table);
-    const sh   = SS.getSheetByName(name) || SS.insertSheet(name);
-    if (action === 'upsert') upsertRow(sh, payload);
-    if (action === 'delete') deleteRow(sh, payload.id);
+    try {
+      const name = capitalize(table);
+      const sh   = SS.getSheetByName(name) || SS.insertSheet(name);
+      if (action === 'upsert') upsertRow(sh, payload);
+      if (action === 'delete') deleteRow(sh, payload.id);
+    } catch (itemErr) {
+      // Log error per-item tapi jangan hentikan item lain
+      console.error('processQueue error on item:', JSON.stringify({ table, action, payload }), itemErr.message);
+    }
   });
 }
 
 function upsertRow(sh, data) {
-  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-  if (!headers[0]) { // Sheet kosong — buat header
-    const keys = Object.keys(data);
-    sh.getRange(1, 1, 1, keys.length).setValues([keys]);
-    sh.appendRow(Object.values(data));
+  const lastCol = sh.getLastColumn();
+  const lastRow = sh.getLastRow();
+
+  // Sheet benar-benar kosong (belum ada baris satupun)
+  if (lastCol < 1 || lastRow < 1) {
+    const keys   = Object.keys(data);
+    const values = Object.values(data);
+    sh.getRange(1, 1, 1, keys.length).setValues([keys]);   // buat header
+    sh.getRange(2, 1, 1, values.length).setValues([values]); // tulis data row
     return;
   }
+
+  // Baca header dari baris 1
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  // Cek apakah kolom id ada di header
+  const idCol = headers.indexOf('id');
+
+  if (idCol < 0 || !headers[0]) {
+    // Header belum ada field 'id' — tulis ulang header lalu append
+    const keys   = Object.keys(data);
+    const values = Object.values(data);
+    sh.getRange(1, 1, 1, keys.length).setValues([keys]);
+    sh.appendRow(values);
+    return;
+  }
+
+  // Cari baris yang sudah ada dengan ID yang sama
   const allData = sh.getDataRange().getValues();
-  const idCol   = headers.indexOf('id');
-  const row     = allData.findIndex((r, i) => i > 0 && r[idCol] == data.id);
+  const rowIdx  = allData.findIndex((r, i) => i > 0 && String(r[idCol]) === String(data.id));
   const values  = headers.map(h => data[h] !== undefined ? data[h] : '');
-  if (row >= 0) sh.getRange(row + 1, 1, 1, values.length).setValues([values]);
-  else sh.appendRow(values);
+
+  if (rowIdx >= 0) {
+    // Update baris yang ada
+    sh.getRange(rowIdx + 1, 1, 1, values.length).setValues([values]);
+  } else {
+    // Tambah baris baru — pastikan kolom cocok dengan header
+    const newRow = headers.map(h => data[h] !== undefined ? data[h] : '');
+    sh.appendRow(newRow);
+  }
 }
 
 function deleteRow(sh, id) {
-  const data  = sh.getDataRange().getValues();
-  const headers = data[0];
-  const idCol = headers.indexOf('id');
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][idCol] == id) { sh.deleteRow(i + 1); break; }
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return; // sheet kosong
+
+  const allData = sh.getDataRange().getValues();
+  const headers = allData[0];
+  const idCol   = headers.indexOf('id');
+  if (idCol < 0) return;
+
+  for (let i = allData.length - 1; i >= 1; i--) {
+    if (String(allData[i][idCol]) === String(id)) {
+      sh.deleteRow(i + 1);
+      break;
+    }
   }
 }
 
