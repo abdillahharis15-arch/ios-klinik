@@ -652,6 +652,17 @@ function renderWelcome() {
         </div>
       </div>
 
+      <!-- TIM MAGANGHUB -->
+      <div class="card welcome-info-card" style="display:flex; flex-direction:column; gap:16px; overflow:hidden; padding:0; border-radius:var(--radius); border:1px solid var(--border)">
+        <img src="./tim-magang.jpg" alt="Tim MagangHub" style="width:100%; height:380px; object-fit:cover; object-position:center 20%; border-bottom:1px solid var(--border)">
+        <div style="padding:24px; padding-top:8px">
+          <h3 style="font-size:20px; font-weight:700; margin-bottom:8px">Dipersembahkan oleh Tim MagangHub</h3>
+          <p style="font-size:14px; color:var(--text-muted); line-height:1.6">
+            Aplikasi IOS ini adalah wujud dedikasi dan inovasi digital dari peserta program MagangHub Divisi Klinik Palembang untuk meningkatkan kualitas pelayanan kesehatan di lingkungan Lapas & Rutan.
+          </p>
+        </div>
+      </div>
+
       <!-- FOOTER KREDIT -->
       <div style="text-align:center; color:var(--text-dim); font-size:11px; margin-top:10px">
         © 2026 IOS App · MagangHub Divisi Klinik Pratama Kelas I Palembang · Kemenimipas
