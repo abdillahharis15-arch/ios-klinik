@@ -57,21 +57,33 @@ document.addEventListener('DOMContentLoaded', () => {
     try { currentAdminUser = JSON.parse(savedUser); } catch(e) { currentAdminUser = null; }
   }
 
-  // ③ Guard: jika path /admin/* tapi belum login → ke /login
+  // ③ Pastikan currentRole sinkron dengan URL path
+  // Jika sessionStorage bilang 'admin' tapi URL bukan /admin → tetap 'admin' (dual access OK)
+  // Jika sessionStorage bilang 'publik' tapi URL /admin/* → kemungkinan sesi belum terbaca, cek ulang
   if (isAdminRoute && currentRole !== 'admin') {
-    window.location.replace('/login');
-    return; // stop init
+    // Coba baca ulang dari sessionStorage (mungkin ada race condition)
+    const retryRole = sessionStorage.getItem('ios_role');
+    if (retryRole === 'admin') {
+      currentRole = 'admin';
+      console.log('[IOS Init] Role dipulihkan dari sessionStorage setelah URL diperbaiki.');
+    } else {
+      console.warn('[IOS Init] Tidak ada sesi admin — redirect ke /login');
+      window.location.replace('/login');
+      return;
+    }
   }
-  // Guard: jika sudah login tapi buka path publik → tetap biarkan (dual access OK)
 
   SyncManager.init();
   updateClock();
   setInterval(updateClock, 1000);
+
+  // Render sidebar SETELAH role dipastikan benar
   renderSidebarNav();
   renderSidebarFooter();
 
   // ④ Navigasi awal berdasarkan path URL
   const startPage = _getPageFromPath(location.pathname);
+  console.log(`[IOS Init] Role: ${currentRole}, isAdminRoute: ${isAdminRoute}, startPage: ${startPage}`);
   navigate(startPage, { replace: true });
 
   // ⑤ Handle Back/Forward browser
