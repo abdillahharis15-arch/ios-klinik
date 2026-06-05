@@ -136,24 +136,29 @@ function renderSidebarFooter() {
     `;
   } else if (isAdminRoute) {
     footer.innerHTML = `
-      <div class="user-card" onclick="showLoginPage()" style="cursor:pointer;background:rgba(255,255,255,0.02)">
-        <div class="user-avatar" style="background:var(--text-dim)"><i class="ph ph-user"></i></div>
-        <div class="user-info">
-          <span class="user-name">Akses Publik</span>
-          <span class="user-role">Klik untuk Login Admin</span>
+      <a href="login.html" style="text-decoration:none">
+        <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.08);border-color:rgba(14,165,233,0.2)">
+          <div class="user-avatar" style="background:var(--primary)"><i class="ph ph-sign-in"></i></div>
+          <div class="user-info">
+            <span class="user-name" style="color:var(--primary)">Login Admin</span>
+            <span class="user-role">Klik untuk masuk ke portal</span>
+          </div>
+          <i class="ph ph-arrow-right" style="margin-left:auto;opacity:0.8;font-size:20px;color:var(--primary)"></i>
         </div>
-        <i class="ph ph-lock" style="margin-left:auto;opacity:0.6;font-size:20px;color:var(--text-muted)"></i>
-      </div>
+      </a>
     `;
   } else {
     footer.innerHTML = `
-      <div class="user-card" style="background:rgba(255,255,255,0.01);border-color:transparent">
-        <div class="user-avatar" style="background:linear-gradient(135deg, var(--primary), var(--secondary))"><i class="ph-fill ph-graduation-cap"></i></div>
-        <div class="user-info">
-          <span class="user-name">MagangHub</span>
-          <span class="user-role">Divisi Klinik Palembang</span>
+      <a href="login.html" style="text-decoration:none">
+        <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.05);border-color:rgba(14,165,233,0.15)">
+          <div class="user-avatar" style="background:linear-gradient(135deg, var(--primary), var(--secondary))"><i class="ph-fill ph-graduation-cap"></i></div>
+          <div class="user-info">
+            <span class="user-name">MagangHub</span>
+            <span class="user-role">Portal Admin → Klik di sini</span>
+          </div>
+          <i class="ph ph-arrow-right" style="margin-left:auto;opacity:0.6;font-size:18px;color:var(--primary)"></i>
         </div>
-      </div>
+      </a>
     `;
   }
 }
@@ -336,14 +341,10 @@ function lockAdminMode() {
     console.warn('Gagal merapikan URL:', e);
   }
   showToast('🔒 Berhasil keluar dari mode Admin.');
-  renderSidebarNav();
-  renderSidebarFooter();
-  navigate('welcome');
-  
-  // Tampilkan halaman login setelah keluar
+  // Redirect ke halaman login yang proper
   setTimeout(() => {
-    showLoginPage();
-  }, 300);
+    window.location.href = 'login.html';
+  }, 600);
 }
 
 // ---- ROUTER ----

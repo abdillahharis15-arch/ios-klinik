@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Admin — IOS Klinik Pratama Kelas I Palembang</title>
+  <meta name="description" content="Halaman login khusus admin IOS Klinik Pratama Kelas I Palembang" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #0EA5E9;
+      --primary-dark: #0284C7;
+      --secondary: #10B981;
+      --danger: #EF4444;
+      --bg: #0A0F1E;
+      --surface: rgba(255,255,255,0.05);
+      --border: rgba(255,255,255,0.1);
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --radius: 16px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── ANIMATED BACKGROUND ── */
+    .login-bg {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 80%, rgba(14,165,233,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(99,102,241,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(16,185,129,0.08) 0%, transparent 60%),
+        linear-gradient(135deg, #0A0F1E 0%, #0D1426 50%, #0A1628 100%);
+      animation: bgPulse 8s ease-in-out infinite alternate;
+    }
+    @keyframes bgPulse {
+      0%   { filter: hue-rotate(0deg); }
+      100% { filter: hue-rotate(15deg); }
+    }
+
+    /* Floating grid lines */
+    .login-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(14,165,233,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14,165,233,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* Floating circles */
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); z-index: 0; pointer-events: none;
+      animation: orbFloat 10s ease-in-out infinite alternate;
+    }
+    .orb-1 { width:400px; height:400px; background:rgba(14,165,233,0.12); top:-100px; left:-100px; animation-duration:12s; }
+    .orb-2 { width:350px; height:350px; background:rgba(99,102,241,0.12); bottom:-80px; right:-80px; animation-duration:9s; animation-delay:2s; }
+    .orb-3 { width:200px; height:200px; background:rgba(16,185,129,0.10); top:50%; left:50%; transform:translate(-50%,-50%); animation-duration:7s; animation-delay:1s; }
+    @keyframes orbFloat {
+      0%   { transform: translateY(0) scale(1); }
+      100% { transform: translateY(-40px) scale(1.05); }
+    }
+
+    /* ── LAYOUT ── */
+    .login-wrapper {
+      position: relative; z-index: 10;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 480px;
+    }
+
+    /* Left panel — branding */
+    .login-left {
+      display: flex; flex-direction: column; justify-content: center; padding: 60px;
+    }
+    .brand-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(14,165,233,0.15); border: 1px solid rgba(14,165,233,0.3);
+      color: var(--primary); border-radius: 99px;
+      padding: 6px 16px; font-size: 12px; font-weight: 600; letter-spacing: 1px;
+      margin-bottom: 32px; width: fit-content;
+    }
+    .brand-logo {
+      display: flex; align-items: center; gap: 16px; margin-bottom: 28px;
+    }
+    .brand-logo-icon {
+      width: 64px; height: 64px; border-radius: 18px;
+      background: linear-gradient(135deg, var(--primary), #6366F1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; color: #fff;
+      box-shadow: 0 8px 32px rgba(14,165,233,0.4);
+    }
+    .brand-logo-text { display: flex; flex-direction: column; }
+    .brand-name { font-size: 36px; font-weight: 800; letter-spacing: -1px;
+      background: linear-gradient(90deg, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand-full { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .brand-desc {
+      font-size: 16px; color: var(--text-muted); line-height: 1.7; max-width: 420px; margin-bottom: 40px;
+    }
+    .brand-features { display: flex; flex-direction: column; gap: 14px; }
+    .feature-item {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 14px; color: var(--text-muted);
+    }
+    .feature-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+
+    /* Right panel — form */
+    .login-right {
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 48px;
+      border-left: 1px solid var(--border);
+      background: rgba(255,255,255,0.025);
+      backdrop-filter: blur(24px);
+    }
+
+    .login-card {
+      width: 100%; max-width: 380px;
+      animation: cardIn 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(40px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0)   scale(1); }
+    }
+
+    .login-title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+    .login-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 36px; }
+
+    .login-field { margin-bottom: 20px; }
+    .login-field label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .login-field label i { font-size: 15px; }
+
+    .input-wrap { position: relative; }
+    .login-input {
+      width: 100%; padding: 13px 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .login-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+      background: rgba(14,165,233,0.06);
+    }
+    .login-input.has-toggle { padding-right: 48px; }
+
+    .eye-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 18px; padding: 4px;
+      transition: color 0.2s;
+    }
+    .eye-btn:hover { color: var(--primary); }
+
+    .login-error {
+      display: none; align-items: center; gap: 8px;
+      background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+      color: #FCA5A5; border-radius: 10px;
+      padding: 10px 14px; font-size: 12px; font-weight: 500;
+      margin-bottom: 20px;
+    }
+    .login-error.show { display: flex; }
+
+    .login-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--primary), #6366F1);
+      color: #fff; border: none; border-radius: 12px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 15px; font-weight: 700; letter-spacing: 0.3px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 24px rgba(14,165,233,0.35);
+      margin-bottom: 24px;
+    }
+    .login-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 10px 32px rgba(14,165,233,0.5); }
+    .login-btn:active { transform: translateY(0); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .login-divider {
+      text-align: center; font-size: 12px; color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .login-public-link {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px; border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text-muted);
+      font-size: 13px; font-weight: 500; text-decoration: none;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .login-public-link:hover {
+      background: var(--surface); color: var(--text); border-color: rgba(255,255,255,0.2);
+    }
+
+    .login-footer {
+      margin-top: 32px; text-align: center;
+      font-size: 11px; color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* Shake animation for wrong password */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .shake { animation: shake 0.4s ease; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.6s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Responsive — Mobile */
+    @media (max-width: 768px) {
+      .login-wrapper { grid-template-columns: 1fr; }
+      .login-left { display: none; }
+      .login-right { border-left: none; background: transparent; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-bg"></div>
+  <div class="login-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="login-wrapper">
+
+    <!-- LEFT: Branding Panel -->
+    <div class="login-left">
+      <div class="brand-badge">
+        <i class="ph-fill ph-shield-check"></i> PORTAL ADMIN EKSKLUSIF
+      </div>
+      <div class="brand-logo">
+        <div class="brand-logo-icon">
+          <i class="ph-fill ph-first-aid-kit"></i>
+        </div>
+        <div class="brand-logo-text">
+          <span class="brand-name">IOS</span>
+          <span class="brand-full">Informasi Obat & Kesehatan</span>
+        </div>
+      </div>
+      <p class="brand-desc">
+        Sistem manajemen digital terpadu untuk Klinik Pratama Kelas I Lapas Palembang.
+        Kelola stok obat, data pegawai, dan konten kesehatan secara real-time.
+      </p>
+      <div class="brand-features">
+        <div class="feature-item">
+          <div class="feature-icon">💊</div>
+          <span>Manajemen stok & transaksi obat secara real-time</span>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">👥</div>
+          <span>Data pegawai lengkap dengan foto profil</span>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">☁️</div>
+          <span>Sinkronisasi otomatis ke Google Spreadsheet</span>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">📲</div>
+          <span>Akses offline-first, bekerja tanpa internet</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Login Form -->
+    <div class="login-right">
+      <div class="login-card">
+        <h1 class="login-title">Selamat Datang 👋</h1>
+        <p class="login-subtitle">Masuk ke Portal Admin untuk mengelola sistem</p>
+
+        <div class="login-field">
+          <label for="username"><i class="ph ph-user"></i> Username</label>
+          <input type="text" id="username" class="login-input" placeholder="Masukkan username..."
+            autocomplete="username" onkeydown="handleKeydown(event)" />
+        </div>
+
+        <div class="login-field">
+          <label for="password"><i class="ph ph-lock"></i> Password</label>
+          <div class="input-wrap">
+            <input type="password" id="password" class="login-input has-toggle"
+              placeholder="Masukkan password..." autocomplete="current-password"
+              onkeydown="handleKeydown(event)" />
+            <button class="eye-btn" onclick="toggleEye()" type="button" id="eyeBtn">
+              <i class="ph ph-eye" id="eyeIcon"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="login-error" id="loginError">
+          <i class="ph ph-warning-circle"></i>
+          <span id="loginErrorMsg">Username atau password salah!</span>
+        </div>
+
+        <button class="login-btn" id="loginBtn" onclick="doLogin()">
+          <div class="spinner" id="spinner"></div>
+          <i class="ph ph-sign-in" id="loginIcon"></i>
+          <span id="loginBtnText">Masuk ke Admin</span>
+        </button>
+
+        <div class="login-divider">atau</div>
+        <a href="index.html" class="login-public-link">
+          <i class="ph ph-globe"></i> Lihat Tampilan Publik
+        </a>
+
+        <div class="login-footer">
+          Hanya staf yang berwenang yang dapat mengakses portal ini.<br>
+          © 2026 IOS · MagangHub Divisi Klinik Pratama Kelas I Palembang
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Load data dari localStorage (sama persis dengan data.js)
+    function getAccounts() {
+      try {
+        const raw = localStorage.getItem('ios_accounts');
+        if (raw) return JSON.parse(raw);
+      } catch(e) {}
+      // Default account jika belum ada di localStorage
+      return [{ id:1, username:'admin', password:'admin1234', nama:'Admin Klinik', role:'Super Admin' }];
+    }
+
+    function toggleEye() {
+      const input = document.getElementById('password');
+      const icon  = document.getElementById('eyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'ph ph-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'ph ph-eye';
+      }
+    }
+
+    function handleKeydown(e) {
+      if (e.key === 'Enter') doLogin();
+    }
+
+    function showError(msg) {
+      const div = document.getElementById('loginError');
+      const span = document.getElementById('loginErrorMsg');
+      span.textContent = msg;
+      div.classList.add('show');
+      document.getElementById('loginBtn').classList.add('shake');
+      setTimeout(() => document.getElementById('loginBtn').classList.remove('shake'), 400);
+    }
+
+    function hideError() {
+      document.getElementById('loginError').classList.remove('show');
+    }
+
+    function setLoading(on) {
+      document.getElementById('spinner').style.display  = on ? 'block' : 'none';
+      document.getElementById('loginIcon').style.display = on ? 'none' : 'inline';
+      document.getElementById('loginBtnText').textContent = on ? 'Memverifikasi...' : 'Masuk ke Admin';
+      document.getElementById('loginBtn').disabled = on;
+    }
+
+    async function doLogin() {
+      hideError();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!username || !password) {
+        showError('Username dan password wajib diisi!');
+        return;
+      }
+
+      setLoading(true);
+      await new Promise(r => setTimeout(r, 600)); // simulasi loading
+
+      const accounts = getAccounts();
+      const account  = accounts.find(a =>
+        a.username === username && a.password === password
+      );
+
+      if (!account) {
+        setLoading(false);
+        showError('Username atau password salah!');
+        return;
+      }
+
+      // Login berhasil — simpan sesi
+      sessionStorage.setItem('ios_role', 'admin');
+      sessionStorage.setItem('ios_admin_user', JSON.stringify(account));
+
+      // Redirect ke dashboard admin
+      window.location.href = 'index.html?admin=true#welcome';
+    }
+
+    // Jika sudah login, langsung redirect ke admin
+    if (sessionStorage.getItem('ios_role') === 'admin') {
+      window.location.href = 'index.html?admin=true#welcome';
+    }
+
+    // Auto-focus ke username input
+    window.addEventListener('load', () => {
+      document.getElementById('username').focus();
+    });
+  </script>
+</body>
+</html>
