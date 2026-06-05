@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>IOS Klinik</title></head>
+<body>
+<!--
+  404.html — SPA Redirect Fallback
+  ============================================================
+  Live Server (dan GitHub Pages) tidak mendukung URL rewriting.
+  Saat user refresh di /admin/obat, server mencari file tersebut
+  → tidak ditemukan → melayani 404.html ini.
+  
+  Solusi: Simpan path asli ke sessionStorage, redirect ke /,
+  lalu index.html membaca kembali dan memulihkan URL dengan
+  history.replaceState().
+  
+  Teknik ini dikenal sebagai "SPA 404 Redirect Trick".
+  ============================================================
+-->
+<script>
+  // 1. Simpan path yang diminta ke sessionStorage
+  const path = window.location.pathname + window.location.search;
+  sessionStorage.setItem('ios_spa_redirect', path);
+  
+  // 2. Redirect ke root — index.html akan memulihkan URL
+  window.location.replace('/');
+</script>
+</body>
+</html>

@@ -20,6 +20,17 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <!-- SPA Redirect Handler: pulihkan URL dari 404.html redirect trick -->
+  <!-- Ini diperlukan agar Live Server + GitHub Pages support clean URL -->
+  <script>
+    (function() {
+      var redirect = sessionStorage.getItem('ios_spa_redirect');
+      if (redirect) {
+        sessionStorage.removeItem('ios_spa_redirect');
+        window.history.replaceState(null, '', redirect);
+      }
+    })();
+  </script>
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">

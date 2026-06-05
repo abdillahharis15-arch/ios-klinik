@@ -1,50 +1,100 @@
 // ============================================================
 // APP.JS — Main Application Logic & Router
 // IOS Informasi Obat dan Kesehatan
+// Routing: History API (clean URL, no hash, no ?admin=true)
 // ============================================================
 
 let currentPage = 'welcome';
 let charts = {};
-let isAdminRoute = location.search.includes('admin=true');
-let currentRole = isAdminRoute ? (sessionStorage.getItem('ios_role') || 'publik') : 'publik'; // 'publik' | 'admin'
+let currentRole = sessionStorage.getItem('ios_role') || 'publik'; // 'publik' | 'admin'
+let isAdminRoute = location.pathname.startsWith('/admin');         // untuk backward compat
 let currentAdminUser = null; // Stores logged-in account object
+
+// ── Router Utilities ────────────────────────────────────────
+/**
+ * Ekstrak nama halaman dari URL path.
+ * /           → 'welcome'
+ * /obat       → 'obat'
+ * /admin      → 'dashboard'
+ * /admin/obat → 'obat'
+ */
+function _getPageFromPath(pathname) {
+  const parts = pathname.replace(/^\//, '').split('/').filter(Boolean);
+  if (!parts.length) return 'welcome';
+  if (parts[0] === 'admin') return parts[1] || 'dashboard';
+  if (parts[0] === 'login') return null; // handled by login.html
+  return parts[0];
+}
+
+/**
+ * Bangun URL bersih untuk halaman & role tertentu.
+ * welcome + publik  → '/'
+ * obat    + publik  → '/obat'
+ * obat    + admin   → '/admin/obat'
+ */
+function _getUrlForPage(page, role) {
+  if (page === 'welcome') return role === 'admin' ? '/admin/welcome' : '/';
+  const prefix = role === 'admin' ? '/admin' : '';
+  return `${prefix}/${page}`;
+}
 
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', () => {
+  // ① Pulihkan URL jika kita datang dari 404.html redirect trick
+  const spaRedirect = sessionStorage.getItem('ios_spa_redirect');
+  if (spaRedirect) {
+    sessionStorage.removeItem('ios_spa_redirect');
+    history.replaceState(null, '', spaRedirect);
+    // Update isAdminRoute setelah URL dipulihkan
+    isAdminRoute = location.pathname.startsWith('/admin');
+  }
+
   initData();
-  // Restore logged-in user if session active
+
+  // ② Restore session login
   const savedUser = sessionStorage.getItem('ios_admin_user');
-  if (isAdminRoute && savedUser) {
+  if (savedUser) {
     try { currentAdminUser = JSON.parse(savedUser); } catch(e) { currentAdminUser = null; }
   }
+
+  // ③ Guard: jika path /admin/* tapi belum login → ke /login
+  if (isAdminRoute && currentRole !== 'admin') {
+    window.location.replace('/login');
+    return; // stop init
+  }
+  // Guard: jika sudah login tapi buka path publik → tetap biarkan (dual access OK)
+
   SyncManager.init();
   updateClock();
   setInterval(updateClock, 1000);
   renderSidebarNav();
   renderSidebarFooter();
-  navigate(location.hash.replace('#', '') || 'welcome');
+
+  // ④ Navigasi awal berdasarkan path URL
+  const startPage = _getPageFromPath(location.pathname);
+  navigate(startPage, { replace: true });
+
+  // ⑤ Handle Back/Forward browser
+  window.addEventListener('popstate', (e) => {
+    const page = (e.state && e.state.page) || _getPageFromPath(location.pathname);
+    navigate(page, { skipPush: true });
+  });
 
   // Render notifikasi stok obat real-time
   setTimeout(renderNotif, 800);
-  // Auto-refresh notifikasi setiap 60 detik
   setInterval(renderNotif, 60_000);
-  
-  // Show full-screen login page if visiting admin route and not logged in
-  if (isAdminRoute && currentRole === 'publik') {
-    setTimeout(showLoginPage, 300);
-  }
-  
-  // Auto-pull data from Sheets on load jika sudah login dan ada URL GAS
+
+  // Auto-pull data dari Sheets saat login
   if (currentRole === 'admin' && localStorage.getItem('ios_gas_url')) {
     setTimeout(async () => {
       try {
         const r = await SyncManager.pull();
         if (r.ok) {
           showToast('☁️ Data berhasil disinkronkan dari Google Sheets!');
-          navigate(currentPage);
-          renderNotif(); // refresh notif setelah pull
+          navigate(currentPage, { skipPush: true });
+          renderNotif();
         }
-      } catch(e) { /* silent fail — tetap pakai data lokal */ }
+      } catch(e) { /* silent fail */ }
     }, 1500);
   }
 });
@@ -109,12 +159,16 @@ function renderSidebarNav() {
 
   nav.innerHTML = items
     .filter(item => item.roles.includes(currentRole))
-    .map(item => `
-      <a href="#${item.id}" class="nav-item ${currentPage === item.id ? 'active' : ''}" id="nav-${item.id}" onclick="navigate('${item.id}')">
-        <i class="${item.icon}"></i>
-        <span>${item.label}</span>
-      </a>
-    `).join('');
+    .map(item => {
+      const href = _getUrlForPage(item.id, currentRole);
+      return `
+        <a href="${href}" class="nav-item ${currentPage === item.id ? 'active' : ''}" id="nav-${item.id}"
+           onclick="event.preventDefault(); navigate('${item.id}')">
+          <i class="${item.icon}"></i>
+          <span>${item.label}</span>
+        </a>
+      `;
+    }).join('');
 }
 
 function renderSidebarFooter() {
@@ -136,7 +190,7 @@ function renderSidebarFooter() {
     `;
   } else if (isAdminRoute) {
     footer.innerHTML = `
-      <a href="login.html" style="text-decoration:none">
+      <a href="/login" style="text-decoration:none">
         <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.08);border-color:rgba(14,165,233,0.2)">
           <div class="user-avatar" style="background:var(--primary)"><i class="ph ph-sign-in"></i></div>
           <div class="user-info">
@@ -149,7 +203,7 @@ function renderSidebarFooter() {
     `;
   } else {
     footer.innerHTML = `
-      <a href="login.html" style="text-decoration:none">
+      <a href="/login" style="text-decoration:none">
         <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.05);border-color:rgba(14,165,233,0.15)">
           <div class="user-avatar" style="background:linear-gradient(135deg, var(--primary), var(--secondary))"><i class="ph-fill ph-graduation-cap"></i></div>
           <div class="user-info">
@@ -329,80 +383,105 @@ function submitLogin() {
 function lockAdminMode() {
   currentRole = 'publik';
   currentAdminUser = null;
+  isAdminRoute = false;
   sessionStorage.setItem('ios_role', 'publik');
   sessionStorage.removeItem('ios_admin_user');
-  isAdminRoute = false;
-  try {
-    if (window.history && window.history.replaceState) {
-      const cleanUrl = location.protocol + '//' + location.host + location.pathname + '#welcome';
-      window.history.replaceState({}, '', cleanUrl);
-    }
-  } catch (e) {
-    console.warn('Gagal merapikan URL:', e);
-  }
   showToast('🔒 Berhasil keluar dari mode Admin.');
-  // Redirect ke halaman login yang proper
-  setTimeout(() => {
-    window.location.href = 'login.html';
-  }, 600);
+  // Redirect ke halaman login dengan clean URL
+  setTimeout(() => { window.location.replace('/login'); }, 600);
 }
 
-// ---- ROUTER ----
-function navigate(page) {
-  currentPage = page || 'dashboard';
+// ============================================================
+// ROUTER — History API (Clean URL, no hash)
+// ============================================================
 
-  // Batasi navigasi URL untuk pengguna publik
+/**
+ * Navigasi ke halaman tertentu.
+ * @param {string} page       - ID halaman: 'welcome'|'obat'|'pegawai'|...
+ * @param {object} [opts]
+ * @param {boolean} [opts.replace]  - pakai replaceState (tidak tambah history)
+ * @param {boolean} [opts.skipPush] - skip pushState (misal dipanggil dari popstate)
+ */
+function navigate(page, opts = {}) {
+  currentPage = page || (currentRole === 'admin' ? 'dashboard' : 'welcome');
+
+  // Guard: halaman khusus admin
   const adminPages = ['dashboard', 'laporan', 'pengaturan'];
   if (currentRole === 'publik' && adminPages.includes(currentPage)) {
     currentPage = 'welcome';
-    location.hash = '#welcome';
     showToast('⚠️ Akses dibatasi! Silakan login Admin terlebih dahulu.', true);
+    history.replaceState({ page: 'welcome' }, '', '/');
+    return _renderPage('welcome');
   }
 
-  location.hash = currentPage;
+  // ── Update URL dengan History API ──────────────────────────
+  if (!opts.skipPush) {
+    const url = _getUrlForPage(currentPage, currentRole);
+    if (opts.replace) {
+      history.replaceState({ page: currentPage }, '', url);
+    } else if (location.pathname !== url) {
+      history.pushState({ page: currentPage }, '', url);
+    }
+  }
 
-  // Destroy existing charts
+  _renderPage(currentPage);
+}
+
+/** Render konten halaman tanpa mengubah URL */
+function _renderPage(page) {
+  // Hancurkan chart sebelumnya
   Object.values(charts).forEach(c => { if (c && c.destroy) c.destroy(); });
   charts = {};
 
-  // Update nav
+  // Update active nav item
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const navEl = document.getElementById('nav-' + currentPage);
+  const navEl = document.getElementById('nav-' + page);
   if (navEl) navEl.classList.add('active');
 
-  // Page titles
+  // Update judul topbar
   const titles = {
-    welcome: 'Home',
-    dashboard: 'Dashboard',
-    obat: currentRole === 'admin' ? 'Manajemen Stok Obat' : 'Informasi Stok Obat',
-    pegawai: currentRole === 'admin' ? 'Data Pegawai' : 'Staf Medis Klinik',
-    kesehatan: 'Informasi Kesehatan',
-    laporan: 'Laporan & Statistik',
-    pengaturan: 'Pengaturan'
+    welcome:     'Home',
+    dashboard:   'Dashboard',
+    obat:        currentRole === 'admin' ? 'Manajemen Stok Obat' : 'Informasi Stok Obat',
+    pegawai:     currentRole === 'admin' ? 'Data Pegawai' : 'Staf Medis Klinik',
+    kesehatan:   'Informasi Kesehatan',
+    laporan:     'Laporan & Statistik',
+    pengaturan:  'Pengaturan',
   };
-  document.getElementById('page-title').textContent = titles[currentPage] || 'IOS';
+  const titleEl = document.getElementById('page-title');
+  if (titleEl) titleEl.textContent = titles[page] || 'IOS';
 
+  // Page transition
   const container = document.getElementById('page-container');
-  container.style.animation = 'none';
-  container.offsetHeight;
-  container.style.animation = '';
+  if (container) {
+    container.style.animation = 'none';
+    container.offsetHeight; // reflow
+    container.style.animation = '';
+  }
 
+  // Render page yang sesuai
   const pages = {
-    welcome: renderWelcome,
-    dashboard: renderDashboard,
-    obat: renderObat,
-    pegawai: renderPegawai,
-    kesehatan: renderKesehatan,
-    laporan: renderLaporan,
+    welcome:    renderWelcome,
+    dashboard:  renderDashboard,
+    obat:       renderObat,
+    pegawai:    renderPegawai,
+    kesehatan:  renderKesehatan,
+    laporan:    renderLaporan,
     pengaturan: renderPengaturan,
   };
 
-  if (pages[currentPage]) pages[currentPage]();
-  else container.innerHTML = '<div class="empty-state"><i class="ph ph-smiley-sad"></i><p>Halaman tidak ditemukan</p></div>';
+  if (pages[page]) {
+    pages[page]();
+  } else {
+    if (container) container.innerHTML = '<div class="empty-state"><i class="ph ph-smiley-sad"></i><p>Halaman tidak ditemukan</p></div>';
+  }
 
+  // Mobile: tutup sidebar setelah navigasi
   if (window.innerWidth <= 768) {
-    document.getElementById('sidebar').classList.remove('collapsed');
-    document.getElementById('main-content').classList.remove('expanded');
+    const sb = document.getElementById('sidebar');
+    const mc = document.getElementById('main-content');
+    if (sb) sb.classList.remove('collapsed');
+    if (mc) mc.classList.remove('expanded');
   }
 }
 
