@@ -216,6 +216,7 @@ function renderSidebarFooter() {
   if (!footer) return;
 
   if (currentRole === 'admin') {
+    // Admin: tampilkan user card dengan opsi logout
     const user = currentAdminUser || { nama: 'Admin Klinik', role: 'Super Admin', username: 'admin' };
     const initials = user.nama.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     footer.innerHTML = `
@@ -228,31 +229,18 @@ function renderSidebarFooter() {
         <i class="ph ph-sign-out" style="margin-left:auto;opacity:0.8;font-size:20px;color:var(--secondary)" title="Keluar Admin"></i>
       </div>
     `;
-  } else if (isAdminRoute) {
-    footer.innerHTML = `
-      <a href="/login" style="text-decoration:none">
-        <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.08);border-color:rgba(14,165,233,0.2)">
-          <div class="user-avatar" style="background:var(--primary)"><i class="ph ph-sign-in"></i></div>
-          <div class="user-info">
-            <span class="user-name" style="color:var(--primary)">Login Admin</span>
-            <span class="user-role">Klik untuk masuk ke portal</span>
-          </div>
-          <i class="ph ph-arrow-right" style="margin-left:auto;opacity:0.8;font-size:20px;color:var(--primary)"></i>
-        </div>
-      </a>
-    `;
   } else {
+    // Publik: tampilkan branding saja, TANPA link/tombol login
     footer.innerHTML = `
-      <a href="/login" style="text-decoration:none">
-        <div class="user-card" style="cursor:pointer;background:rgba(14,165,233,0.05);border-color:rgba(14,165,233,0.15)">
-          <div class="user-avatar" style="background:linear-gradient(135deg, var(--primary), var(--secondary))"><i class="ph-fill ph-graduation-cap"></i></div>
-          <div class="user-info">
-            <span class="user-name">MagangHub</span>
-            <span class="user-role">Portal Admin → Klik di sini</span>
-          </div>
-          <i class="ph ph-arrow-right" style="margin-left:auto;opacity:0.6;font-size:18px;color:var(--primary)"></i>
+      <div class="user-card" style="opacity:0.55;cursor:default;pointer-events:none">
+        <div class="user-avatar" style="background:linear-gradient(135deg,var(--primary),var(--secondary))">
+          <i class="ph-fill ph-first-aid-kit"></i>
         </div>
-      </a>
+        <div class="user-info">
+          <span class="user-name" style="font-size:12px">Klinik Pratama Kelas I</span>
+          <span class="user-role">Palembang</span>
+        </div>
+      </div>
     `;
   }
 }
