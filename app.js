@@ -3,21 +3,69 @@
 // IOS Informasi Obat dan Kesehatan
 // ============================================================
 
-let currentPage = 'dashboard';
+let currentPage = 'welcome';
 let charts = {};
+let isAdminRoute = location.search.includes('admin=true');
+let currentRole = isAdminRoute ? (sessionStorage.getItem('ios_role') || 'publik') : 'publik'; // 'publik' | 'admin'
+let currentAdminUser = null; // Stores logged-in account object
 
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', () => {
   initData();
+  // Restore logged-in user if session active
+  const savedUser = sessionStorage.getItem('ios_admin_user');
+  if (isAdminRoute && savedUser) {
+    try { currentAdminUser = JSON.parse(savedUser); } catch(e) { currentAdminUser = null; }
+  }
   SyncManager.init();
   updateClock();
   setInterval(updateClock, 1000);
-  navigate(location.hash.replace('#', '') || 'dashboard');
+  renderSidebarNav();
+  renderSidebarFooter();
+  navigate(location.hash.replace('#', '') || 'welcome');
+
+  // Render notifikasi stok obat real-time
+  setTimeout(renderNotif, 800);
+  // Auto-refresh notifikasi setiap 60 detik
+  setInterval(renderNotif, 60_000);
+  
+  // Show full-screen login page if visiting admin route and not logged in
+  if (isAdminRoute && currentRole === 'publik') {
+    setTimeout(showLoginPage, 300);
+  }
+  
+  // Auto-pull data from Sheets on load jika sudah login dan ada URL GAS
+  if (currentRole === 'admin' && localStorage.getItem('ios_gas_url')) {
+    setTimeout(async () => {
+      try {
+        const r = await SyncManager.pull();
+        if (r.ok) {
+          showToast('☁️ Data berhasil disinkronkan dari Google Sheets!');
+          navigate(currentPage);
+          renderNotif(); // refresh notif setelah pull
+        }
+      } catch(e) { /* silent fail — tetap pakai data lokal */ }
+    }, 1500);
+  }
 });
 
-// Klik tombol sync — jika ada antrian push, jika tidak pull
+
+/// Klik tombol sync — jika ada antrian push, jika tidak pull
 async function handleSyncClick() {
   const q = SyncManager.getQueue();
+  
+  if (currentRole === 'publik') {
+    if (!localStorage.getItem('ios_gas_url')) {
+      showToast('Aplikasi dalam mode Offline. Hubungi Admin untuk konfigurasi.', true);
+      return;
+    }
+    showToast('🔄 Mengambil data terbaru dari Google Sheets...');
+    const r = await SyncManager.pull();
+    if (r.ok) { showToast('✅ Data berhasil diperbarui dari Google Sheets!'); navigate(currentPage); }
+    else showToast('❌ Gagal mengambil data: ' + r.reason, true);
+    return;
+  }
+
   if (!localStorage.getItem('ios_gas_url')) {
     navigate('pengaturan');
     setTimeout(() => showToast('Masukkan URL Apps Script di Pengaturan terlebih dahulu!', true), 400);
@@ -44,9 +92,272 @@ function updateClock() {
   if (el) el.innerHTML = `<i class="ph ph-calendar-blank" style="margin-right:6px"></i>${d} &nbsp; <i class="ph ph-clock" style="margin-right:4px"></i>${t}`;
 }
 
+// ---- ROLE MANAGEMENT & DYNAMIC SIDEBAR ----
+function renderSidebarNav() {
+  const nav = document.querySelector('.sidebar-nav');
+  if (!nav) return;
+
+  const items = [
+    { id: 'welcome', label: 'Home', icon: 'ph-fill ph-house', roles: ['publik', 'admin'] },
+    { id: 'dashboard', label: 'Dashboard', icon: 'ph-fill ph-squares-four', roles: ['admin'] },
+    { id: 'obat', label: 'Stok Obat', icon: 'ph-fill ph-pill', roles: ['publik', 'admin'] },
+    { id: 'pegawai', label: 'Data Pegawai', icon: 'ph-fill ph-users-three', roles: ['publik', 'admin'] },
+    { id: 'kesehatan', label: 'Info Kesehatan', icon: 'ph-fill ph-heart-pulse', roles: ['publik', 'admin'] },
+    { id: 'laporan', label: 'Laporan', icon: 'ph-fill ph-chart-bar', roles: ['admin'] },
+    { id: 'pengaturan', label: 'Pengaturan', icon: 'ph-fill ph-gear-six', roles: ['admin'] }
+  ];
+
+  nav.innerHTML = items
+    .filter(item => item.roles.includes(currentRole))
+    .map(item => `
+      <a href="#${item.id}" class="nav-item ${currentPage === item.id ? 'active' : ''}" id="nav-${item.id}" onclick="navigate('${item.id}')">
+        <i class="${item.icon}"></i>
+        <span>${item.label}</span>
+      </a>
+    `).join('');
+}
+
+function renderSidebarFooter() {
+  const footer = document.querySelector('.sidebar-footer');
+  if (!footer) return;
+
+  if (currentRole === 'admin') {
+    const user = currentAdminUser || { nama: 'Admin Klinik', role: 'Super Admin', username: 'admin' };
+    const initials = user.nama.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    footer.innerHTML = `
+      <div class="user-card" onclick="lockAdminMode()" style="cursor:pointer" title="Klik untuk keluar">
+        <div class="user-avatar" style="background:var(--secondary)">${initials}</div>
+        <div class="user-info">
+          <span class="user-name">${user.nama}</span>
+          <span class="user-role">${user.role} (Keluar)</span>
+        </div>
+        <i class="ph ph-sign-out" style="margin-left:auto;opacity:0.8;font-size:20px;color:var(--secondary)" title="Keluar Admin"></i>
+      </div>
+    `;
+  } else if (isAdminRoute) {
+    footer.innerHTML = `
+      <div class="user-card" onclick="showLoginPage()" style="cursor:pointer;background:rgba(255,255,255,0.02)">
+        <div class="user-avatar" style="background:var(--text-dim)"><i class="ph ph-user"></i></div>
+        <div class="user-info">
+          <span class="user-name">Akses Publik</span>
+          <span class="user-role">Klik untuk Login Admin</span>
+        </div>
+        <i class="ph ph-lock" style="margin-left:auto;opacity:0.6;font-size:20px;color:var(--text-muted)"></i>
+      </div>
+    `;
+  } else {
+    footer.innerHTML = `
+      <div class="user-card" style="background:rgba(255,255,255,0.01);border-color:transparent">
+        <div class="user-avatar" style="background:linear-gradient(135deg, var(--primary), var(--secondary))"><i class="ph-fill ph-graduation-cap"></i></div>
+        <div class="user-info">
+          <span class="user-name">MagangHub</span>
+          <span class="user-role">Divisi Klinik Palembang</span>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function showLoginPage() {
+  // Remove existing login page if any
+  const existing = document.getElementById('ios-login-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ios-login-overlay';
+  overlay.innerHTML = `
+    <div class="login-bg-icons" aria-hidden="true">
+      <i class="ph-fill ph-first-aid-kit"></i>
+      <i class="ph-fill ph-pill"></i>
+      <i class="ph-fill ph-heart-pulse"></i>
+      <i class="ph-fill ph-stethoscope"></i>
+      <i class="ph-fill ph-syringe"></i>
+      <i class="ph-fill ph-prescription"></i>
+      <i class="ph-fill ph-microscope"></i>
+      <i class="ph-fill ph-hospital"></i>
+      <i class="ph-fill ph-dna"></i>
+      <i class="ph-fill ph-pill"></i>
+      <i class="ph-fill ph-heart-pulse"></i>
+      <i class="ph-fill ph-first-aid-kit"></i>
+    </div>
+
+    <div class="login-card">
+      <!-- Logo -->
+      <div class="login-logo">
+        <div class="login-logo-icon">
+          <i class="ph-fill ph-first-aid-kit"></i>
+        </div>
+        <div>
+          <div class="login-logo-title">IOS</div>
+          <div class="login-logo-sub">Sistem Informasi Klinik</div>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div class="login-header">
+        <h2>Selamat Datang</h2>
+        <p>Masuk dengan akun admin Anda untuk mengelola sistem klinik</p>
+      </div>
+
+      <!-- Form -->
+      <div class="login-form">
+        <div class="login-field">
+          <label for="loginUsername"><i class="ph ph-user"></i> ID / Username</label>
+          <input type="text" id="loginUsername" class="login-input" placeholder="Masukkan username..." autocomplete="username" />
+        </div>
+        <div class="login-field">
+          <label for="loginPassword"><i class="ph ph-lock"></i> Password</label>
+          <div style="position:relative">
+            <input type="password" id="loginPassword" class="login-input" placeholder="Masukkan password..." autocomplete="current-password" />
+            <button onclick="toggleLoginPasswordVisibility()" class="login-eye-btn" id="loginEyeBtn" type="button" tabindex="-1">
+              <i class="ph ph-eye" id="loginEyeIcon"></i>
+            </button>
+          </div>
+        </div>
+        <div id="loginError" class="login-error" style="display:none">
+          <i class="ph ph-warning-circle"></i> <span id="loginErrorMsg">Username atau password salah.</span>
+        </div>
+        <button class="login-btn" onclick="submitLogin()" id="loginBtn">
+          <i class="ph ph-sign-in"></i> Masuk ke Sistem
+        </button>
+      </div>
+
+      <!-- Footer -->
+      <div class="login-card-footer">
+        <i class="ph-fill ph-shield-check"></i>
+        Klinik Pratama Kelas I Palembang &middot; Kemenimipas
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  setTimeout(() => {
+    overlay.classList.add('login-visible');
+    const u = document.getElementById('loginUsername');
+    if (u) u.focus();
+  }, 50);
+
+  // Enter key support
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitLogin();
+  });
+}
+
+function toggleLoginPasswordVisibility() {
+  const input = document.getElementById('loginPassword');
+  const icon = document.getElementById('loginEyeIcon');
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'ph ph-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'ph ph-eye';
+  }
+}
+
+function submitLogin() {
+  const username = (document.getElementById('loginUsername').value || '').trim();
+  const password = (document.getElementById('loginPassword').value || '').trim();
+  const errorDiv = document.getElementById('loginError');
+  const errorMsg = document.getElementById('loginErrorMsg');
+  const btn = document.getElementById('loginBtn');
+
+  if (!username || !password) {
+    errorMsg.textContent = 'Username dan password wajib diisi.';
+    errorDiv.style.display = 'flex';
+    return;
+  }
+
+  // Shake animation on button
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ph ph-spinner" style="animation:spin 1s linear infinite"></i> Memverifikasi...';
+
+  setTimeout(() => {
+    try {
+      const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+      const account = accounts.find(a => a.username === username && a.password === password);
+
+      if (account) {
+        currentRole = 'admin';
+        currentAdminUser = account;
+        sessionStorage.setItem('ios_role', 'admin');
+        sessionStorage.setItem('ios_admin_user', JSON.stringify(account));
+
+        // Remove login overlay with animation
+        const overlay = document.getElementById('ios-login-overlay');
+        if (overlay) {
+          overlay.style.opacity = '0';
+          overlay.style.transform = 'scale(1.05)';
+          overlay.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+          setTimeout(() => overlay.remove(), 400);
+        }
+
+        renderSidebarNav();
+        renderSidebarFooter();
+        navigate('dashboard');
+        showToast(`🔓 Selamat datang, ${account.nama}!`);
+      } else {
+        errorMsg.textContent = 'Username atau password salah. Periksa kembali.';
+        errorDiv.style.display = 'flex';
+        const card = document.querySelector('.login-card');
+        if (card) {
+          card.style.animation = 'none';
+          card.offsetHeight;
+          card.style.animation = 'loginShake 0.4s ease';
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-sign-in"></i> Masuk ke Sistem';
+        const pwInput = document.getElementById('loginPassword');
+        if (pwInput) { pwInput.value = ''; pwInput.focus(); }
+      }
+    } catch(e) {
+      errorMsg.textContent = 'Terjadi kesalahan sistem. Coba lagi.';
+      errorDiv.style.display = 'flex';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-sign-in"></i> Masuk ke Sistem';
+    }
+  }, 600);
+}
+
+function lockAdminMode() {
+  currentRole = 'publik';
+  currentAdminUser = null;
+  sessionStorage.setItem('ios_role', 'publik');
+  sessionStorage.removeItem('ios_admin_user');
+  isAdminRoute = false;
+  try {
+    if (window.history && window.history.replaceState) {
+      const cleanUrl = location.protocol + '//' + location.host + location.pathname + '#welcome';
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  } catch (e) {
+    console.warn('Gagal merapikan URL:', e);
+  }
+  showToast('🔒 Berhasil keluar dari mode Admin.');
+  renderSidebarNav();
+  renderSidebarFooter();
+  navigate('welcome');
+  
+  // Tampilkan halaman login setelah keluar
+  setTimeout(() => {
+    showLoginPage();
+  }, 300);
+}
+
 // ---- ROUTER ----
 function navigate(page) {
   currentPage = page || 'dashboard';
+
+  // Batasi navigasi URL untuk pengguna publik
+  const adminPages = ['dashboard', 'laporan', 'pengaturan'];
+  if (currentRole === 'publik' && adminPages.includes(currentPage)) {
+    currentPage = 'welcome';
+    location.hash = '#welcome';
+    showToast('⚠️ Akses dibatasi! Silakan login Admin terlebih dahulu.', true);
+  }
+
   location.hash = currentPage;
 
   // Destroy existing charts
@@ -60,9 +371,10 @@ function navigate(page) {
 
   // Page titles
   const titles = {
+    welcome: 'Home',
     dashboard: 'Dashboard',
-    obat: 'Manajemen Stok Obat',
-    pegawai: 'Data Pegawai',
+    obat: currentRole === 'admin' ? 'Manajemen Stok Obat' : 'Informasi Stok Obat',
+    pegawai: currentRole === 'admin' ? 'Data Pegawai' : 'Staf Medis Klinik',
     kesehatan: 'Informasi Kesehatan',
     laporan: 'Laporan & Statistik',
     pengaturan: 'Pengaturan'
@@ -75,6 +387,7 @@ function navigate(page) {
   container.style.animation = '';
 
   const pages = {
+    welcome: renderWelcome,
     dashboard: renderDashboard,
     obat: renderObat,
     pegawai: renderPegawai,
@@ -85,6 +398,11 @@ function navigate(page) {
 
   if (pages[currentPage]) pages[currentPage]();
   else container.innerHTML = '<div class="empty-state"><i class="ph ph-smiley-sad"></i><p>Halaman tidak ditemukan</p></div>';
+
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('collapsed');
+    document.getElementById('main-content').classList.remove('expanded');
+  }
 }
 
 function toggleSidebar() {
@@ -94,6 +412,18 @@ function toggleSidebar() {
   m.classList.toggle('expanded');
 }
 
+document.addEventListener('click', e => {
+  if (window.innerWidth <= 768) {
+    const s = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (s && s.classList.contains('collapsed') && !s.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+      s.classList.remove('collapsed');
+      const m = document.getElementById('main-content');
+      if (m) m.classList.remove('expanded');
+    }
+  }
+});
+
 function toggleDark() {
   document.body.classList.toggle('light-mode');
   const icon = document.getElementById('darkIcon');
@@ -101,7 +431,12 @@ function toggleDark() {
 }
 
 function toggleNotif() {
-  document.getElementById('notifDropdown').classList.toggle('open');
+  const dd = document.getElementById('notifDropdown');
+  if (!dd) return;
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open');
+  // Refresh notif setiap kali dibuka
+  if (!isOpen) renderNotif();
 }
 document.addEventListener('click', e => {
   const nb = document.querySelector('.notification-btn');
@@ -110,6 +445,110 @@ document.addEventListener('click', e => {
     nd.classList.remove('open');
   }
 });
+
+// ── REAL-TIME NOTIFICATION ENGINE ──────────────────────────────
+function renderNotif() {
+  const listEl  = document.getElementById('notifList');
+  const badgeEl = document.getElementById('notifBadge');
+  if (!listEl) return;
+
+  const obat = getData('obat');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const soon  = new Date(today); soon.setDate(soon.getDate() + 30);
+
+  const items = [];
+
+  obat.forEach(o => {
+    const stok    = Number(o.stok) || 0;
+    const minStok = Number(o.minStok) || 20;
+    const nama    = o.nama || 'Obat Tidak Dikenal';
+    const satuan  = o.satuan || 'unit';
+
+    // 🔴 Stok habis
+    if (stok === 0) {
+      items.push({
+        level: 'danger',
+        icon: 'ph-fill ph-x-circle',
+        title: nama,
+        msg: `Stok <strong>HABIS</strong>! Segera lakukan pengadaan.`,
+        sort: 1
+      });
+    }
+    // 🟡 Stok menipis (di bawah minimum)
+    else if (stok < minStok) {
+      items.push({
+        level: 'warning',
+        icon: 'ph-fill ph-warning',
+        title: nama,
+        msg: `Stok menipis — sisa <strong>${stok} ${satuan}</strong> (min: ${minStok})`,
+        sort: 2
+      });
+    }
+
+    // 🟠 Akan/Sudah Expired
+    if (o.expired) {
+      const exp = new Date(o.expired);
+      exp.setHours(0, 0, 0, 0);
+      if (!isNaN(exp)) {
+        if (exp < today) {
+          items.push({
+            level: 'danger',
+            icon: 'ph-fill ph-skull',
+            title: nama,
+            msg: `Sudah <strong>EXPIRED</strong> sejak ${exp.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})}!`,
+            sort: 0
+          });
+        } else if (exp <= soon) {
+          const diffDays = Math.ceil((exp - today) / 86400000);
+          items.push({
+            level: 'warning',
+            icon: 'ph-fill ph-clock-countdown',
+            title: nama,
+            msg: `Akan expired dalam <strong>${diffDays} hari</strong> (${exp.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})})`,
+            sort: 1
+          });
+        }
+      }
+    }
+  });
+
+  // Urutkan: expired dulu, lalu habis, lalu menipis
+  items.sort((a, b) => a.sort - b.sort);
+
+  // Update badge
+  const count = items.length;
+  if (badgeEl) {
+    badgeEl.textContent = count > 99 ? '99+' : count;
+    badgeEl.style.display = count > 0 ? 'flex' : 'none';
+    badgeEl.style.background = items.some(i => i.sort === 0) ? 'var(--danger)' :
+                               items.some(i => i.level === 'danger') ? 'var(--danger)' :
+                               count > 0 ? '#f59e0b' : 'var(--danger)';
+  }
+
+  // Render list
+  if (items.length === 0) {
+    listEl.innerHTML = `
+      <div class="notif-empty">
+        <i class="ph-fill ph-check-circle" style="color:var(--secondary);font-size:28px"></i>
+        <div style="font-weight:600;margin-top:6px">Semua Stok Aman</div>
+        <div style="color:var(--text-muted);font-size:12px">Tidak ada peringatan saat ini</div>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = items.map(it => `
+    <div class="notif-item ${it.level}" onclick="navigate('obat');document.getElementById('notifDropdown').classList.remove('open')">
+      <i class="${it.icon}"></i>
+      <div>
+        <strong>${it.title}</strong>
+        <span>${it.msg}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+
 
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
@@ -129,6 +568,100 @@ function closeModal() {
 }
 
 // ============================================================
+// WELCOME PAGE
+// ============================================================
+function renderWelcome() {
+  document.getElementById('page-container').innerHTML = `
+    <div class="welcome-container" style="display:flex;flex-direction:column;gap:30px;max-width:1000px;margin:0 auto;padding-bottom:40px">
+      
+      <!-- HERO BANNER -->
+      <div class="welcome-hero" style="background: linear-gradient(135deg, rgba(14,165,233,0.8), rgba(16,185,129,0.8)), url('./bg-klinik.jpeg') center/cover; padding: 50px 40px; border-radius: var(--radius); color: white; position: relative; overflow: hidden; box-shadow: var(--shadow-lg);">
+        <div style="position:relative; z-index:2">
+          <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; border:1px solid rgba(255,255,255,0.3)">Inovasi Digital Klinik</span>
+          <h1 style="font-size:36px; font-weight:800; margin:16px 0 8px 0; font-family:'Poppins', sans-serif">Selamat Datang di IOS</h1>
+          <p style="font-size:15px; opacity:0.95; max-width:650px; line-height:1.6; font-weight:400">
+            Sistem Informasi Obat dan Kesehatan — persembahan inovasi digital dari <b>peserta MagangHub Divisi Klinik</b> untuk optimalisasi pelayanan medis di Klinik Pratama Kelas I Palembang / Lapas & Rutan.
+          </p>
+          <button class="btn btn-primary" onclick="navigate('${currentRole === 'admin' ? 'dashboard' : 'obat'}')" style="margin-top:24px; padding:12px 28px; background:white; color:#0f172a; font-weight:700; border-radius:var(--radius-sm); border:none; box-shadow:0 10px 20px rgba(0,0,0,0.15)">
+            Mulai Jelajahi <i class="ph ph-arrow-right" style="margin-left:6px;font-weight:700"></i>
+          </button>
+        </div>
+        <!-- Decorative blurred glow -->
+        <div style="position:absolute; width:300px; height:300px; background:rgba(255,255,255,0.1); border-radius:50%; filter:blur(80px); top:-50px; right:-50px; z-index:1"></div>
+      </div>
+
+      <!-- GRID INFO -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:24px">
+        
+        <!-- APA ITU IOS -->
+        <div class="card welcome-info-card" style="display:flex; flex-direction:column; gap:12px">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(14,165,233,0.15); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:24px">
+            <i class="ph-fill ph-info"></i>
+          </div>
+          <h3 style="font-size:18px; font-weight:700; margin-top:8px">Apa itu IOS?</h3>
+          <p style="font-size:13px; color:var(--text-muted); line-height:1.7">
+            <b>IOS (Informasi Obat & Kesehatan)</b> adalah platform digital terintegrasi yang dirancang dengan arsitektur <i>Offline-First</i>. Sistem ini bertindak sebagai jembatan basis data real-time antara aplikasi klinik lokal dengan cloud database Google Sheets.
+          </p>
+        </div>
+
+        <!-- MANFAAT UTAMA -->
+        <div class="card welcome-info-card" style="display:flex; flex-direction:column; gap:12px">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.15); color:var(--secondary); display:flex; align-items:center; justify-content:center; font-size:24px">
+            <i class="ph-fill ph-shield-check"></i>
+          </div>
+          <h3 style="font-size:18px; font-weight:700; margin-top:8px">Manfaat Sistem</h3>
+          <p style="font-size:13px; color:var(--text-muted); line-height:1.7">
+            Memudahkan pemantauan ketersediaan obat secara instan bagi staf medis, mencegah penimbunan atau kehabisan stok obat kritis, serta menyajikan edukasi tips kesehatan preventif secara terpusat untuk warga binaan dan staf.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- DETAIL TUJUAN (FULL WIDTH CARD) -->
+      <div class="card" style="padding:30px">
+        <h3 style="font-size:20px; font-weight:700; margin-bottom:20px; display:flex; align-items:center; gap:10px">
+          <i class="ph-fill ph-target" style="color:var(--primary)"></i> Tujuan Pengembangan Aplikasi
+        </h3>
+        
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px">
+          
+          <div style="display:flex; gap:12px">
+            <i class="ph ph-check-circle" style="color:var(--secondary); font-size:22px; flex-shrink:0; margin-top:2px"></i>
+            <div>
+              <h4 style="font-size:14px; font-weight:600; margin-bottom:4px">Digitalisasi Data Medis</h4>
+              <p style="font-size:12px; color:var(--text-muted); line-height:1.6">Mengeliminasi pencatatan manual berbasis kertas (paperless) untuk mengurangi risiko data hilang/rusak.</p>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:12px">
+            <i class="ph ph-check-circle" style="color:var(--secondary); font-size:22px; flex-shrink:0; margin-top:2px"></i>
+            <div>
+              <h4 style="font-size:14px; font-weight:600; margin-bottom:4px">Pengendalian Stok Ketat</h4>
+              <p style="font-size:12px; color:var(--text-muted); line-height:1.6">Melacak peredaran obat-obatan terkontrol secara akurat (seperti OAT dan Psikotropika) dengan otorisasi admin.</p>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:12px">
+            <i class="ph ph-check-circle" style="color:var(--secondary); font-size:22px; flex-shrink:0; margin-top:2px"></i>
+            <div>
+              <h4 style="font-size:14px; font-weight:600; margin-bottom:4px">Offline-First Service</h4>
+              <p style="font-size:12px; color:var(--text-muted); line-height:1.6">Memastikan aplikasi tetap bekerja 100% lancar walau koneksi internet terputus di dalam area klinik lapas.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- FOOTER KREDIT -->
+      <div style="text-align:center; color:var(--text-dim); font-size:11px; margin-top:10px">
+        © 2026 IOS App · MagangHub Divisi Klinik Pratama Kelas I Palembang · Kemenimipas
+      </div>
+
+    </div>
+  `;
+}
+
+// ============================================================
 // DASHBOARD PAGE
 // ============================================================
 function renderDashboard() {
@@ -140,80 +673,118 @@ function renderDashboard() {
   const totalKeluar = obat.reduce((a, b) => a + b.keluar, 0);
   const aktifPegawai = pegawai.filter(p => p.status === 'Aktif').length;
 
-  document.getElementById('page-container').innerHTML = `
-    <div class="page-header">
-      <div>
-        <h1>👋 Selamat Datang, Admin!</h1>
-        <p>Ringkasan aktivitas Klinik Pratama Kelas I Palembang hari ini</p>
-      </div>
-    </div>
+  const isHtmlAdmin = currentRole === 'admin';
 
-    ${stokHabis > 0 ? `<div class="alert-strip danger"><i class="ph-fill ph-warning-circle"></i> <b>${stokHabis} obat</b> stok telah habis — segera lakukan pengadaan!</div>` : ''}
-    ${stokMenipis > 0 ? `<div class="alert-strip warning"><i class="ph-fill ph-warning"></i> <b>${stokMenipis} obat</b> stok menipis — perlu perhatian segera</div>` : ''}
+  let alertStrip = '';
+  if (isHtmlAdmin) {
+    if (stokHabis > 0) alertStrip += `<div class="alert-strip danger"><i class="ph-fill ph-warning-circle"></i> <b>${stokHabis} obat</b> stok telah habis — segera lakukan pengadaan!</div>`;
+    if (stokMenipis > 0) alertStrip += `<div class="alert-strip warning"><i class="ph-fill ph-warning"></i> <b>${stokMenipis} obat</b> stok menipis — perlu perhatian segera</div>`;
+  }
 
-    <div class="stat-grid">
-      <div class="stat-card" style="--card-color: #0EA5E9">
-        <div class="stat-icon" style="background:rgba(14,165,233,0.15); color:#0EA5E9">
-          <i class="ph-fill ph-pill"></i>
+  let statsGrid = '';
+  if (isHtmlAdmin) {
+    statsGrid = `
+      <div class="stat-grid">
+        <div class="stat-card" style="--card-color: #0EA5E9">
+          <div class="stat-icon" style="background:rgba(14,165,233,0.15); color:#0EA5E9">
+            <i class="ph-fill ph-pill"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${obat.length}</div>
+            <div class="label">Total Jenis Obat</div>
+            <div class="change up"><i class="ph ph-trend-up"></i> Aktif terdaftar</div>
+          </div>
         </div>
-        <div class="stat-info">
-          <div class="value">${obat.length}</div>
-          <div class="label">Total Jenis Obat</div>
-          <div class="change up"><i class="ph ph-trend-up"></i> Aktif terdaftar</div>
+        <div class="stat-card" style="--card-color: #10B981">
+          <div class="stat-icon" style="background:rgba(16,185,129,0.15); color:#10B981">
+            <i class="ph-fill ph-arrow-circle-down"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${totalMasuk}</div>
+            <div class="label">Total Stok Masuk</div>
+            <div class="change up"><i class="ph ph-trend-up"></i> Pengadaan bulan ini</div>
+          </div>
+        </div>
+        <div class="stat-card" style="--card-color: #F59E0B">
+          <div class="stat-icon" style="background:rgba(245,158,11,0.15); color:#F59E0B">
+            <i class="ph-fill ph-arrow-circle-up"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${totalKeluar}</div>
+            <div class="label">Total Stok Keluar</div>
+            <div class="change down"><i class="ph ph-trend-down"></i> Distribusi bulan ini</div>
+          </div>
+        </div>
+        <div class="stat-card" style="--card-color: #6366F1">
+          <div class="stat-icon" style="background:rgba(99,102,241,0.15); color:#6366F1">
+            <i class="ph-fill ph-users-three"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${aktifPegawai}</div>
+            <div class="label">Pegawai Aktif</div>
+            <div class="change up"><i class="ph ph-check-circle"></i> dari ${pegawai.length} total</div>
+          </div>
+        </div>
+        <div class="stat-card" style="--card-color: #EF4444">
+          <div class="stat-icon" style="background:rgba(239,68,68,0.15); color:#EF4444">
+            <i class="ph-fill ph-warning-circle"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${stokHabis}</div>
+            <div class="label">Stok Habis</div>
+            <div class="change down" style="color:var(--danger)"><i class="ph ph-x-circle"></i> Perlu pengadaan</div>
+          </div>
+        </div>
+        <div class="stat-card" style="--card-color: #F59E0B">
+          <div class="stat-icon" style="background:rgba(245,158,11,0.15); color:#F59E0B">
+            <i class="ph-fill ph-warning"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${stokMenipis}</div>
+            <div class="label">Stok Menipis</div>
+            <div class="change" style="color:var(--warning)"><i class="ph ph-arrows-down-up"></i> Perlu perhatian</div>
+          </div>
         </div>
       </div>
-      <div class="stat-card" style="--card-color: #10B981">
-        <div class="stat-icon" style="background:rgba(16,185,129,0.15); color:#10B981">
-          <i class="ph-fill ph-arrow-circle-down"></i>
+    `;
+  } else {
+    statsGrid = `
+      <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))">
+        <div class="stat-card" style="--card-color: #0EA5E9">
+          <div class="stat-icon" style="background:rgba(14,165,233,0.15); color:#0EA5E9">
+            <i class="ph-fill ph-pill"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${obat.length}</div>
+            <div class="label">Jenis Obat Tersedia</div>
+            <div class="change up"><i class="ph ph-check-circle"></i> Siap didistribusikan</div>
+          </div>
         </div>
-        <div class="stat-info">
-          <div class="value">${totalMasuk}</div>
-          <div class="label">Total Stok Masuk</div>
-          <div class="change up"><i class="ph ph-trend-up"></i> Pengadaan bulan ini</div>
+        <div class="stat-card" style="--card-color: #6366F1">
+          <div class="stat-icon" style="background:rgba(99,102,241,0.15); color:#6366F1">
+            <i class="ph-fill ph-users-three"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${aktifPegawai}</div>
+            <div class="label">Staf Medis Aktif</div>
+            <div class="change up"><i class="ph ph-clock"></i> Jadwal pelayanan aktif</div>
+          </div>
         </div>
-      </div>
-      <div class="stat-card" style="--card-color: #F59E0B">
-        <div class="stat-icon" style="background:rgba(245,158,11,0.15); color:#F59E0B">
-          <i class="ph-fill ph-arrow-circle-up"></i>
-        </div>
-        <div class="stat-info">
-          <div class="value">${totalKeluar}</div>
-          <div class="label">Total Stok Keluar</div>
-          <div class="change down"><i class="ph ph-trend-down"></i> Distribusi bulan ini</div>
-        </div>
-      </div>
-      <div class="stat-card" style="--card-color: #6366F1">
-        <div class="stat-icon" style="background:rgba(99,102,241,0.15); color:#6366F1">
-          <i class="ph-fill ph-users-three"></i>
-        </div>
-        <div class="stat-info">
-          <div class="value">${aktifPegawai}</div>
-          <div class="label">Pegawai Aktif</div>
-          <div class="change up"><i class="ph ph-check-circle"></i> dari ${pegawai.length} total</div>
-        </div>
-      </div>
-      <div class="stat-card" style="--card-color: #EF4444">
-        <div class="stat-icon" style="background:rgba(239,68,68,0.15); color:#EF4444">
-          <i class="ph-fill ph-warning-circle"></i>
-        </div>
-        <div class="stat-info">
-          <div class="value">${stokHabis}</div>
-          <div class="label">Stok Habis</div>
-          <div class="change down" style="color:var(--danger)"><i class="ph ph-x-circle"></i> Perlu pengadaan</div>
+        <div class="stat-card" style="--card-color: #10B981">
+          <div class="stat-icon" style="background:rgba(16,185,129,0.15); color:#10B981">
+            <i class="ph-fill ph-heart-pulse"></i>
+          </div>
+          <div class="stat-info">
+            <div class="value">${getData('kesehatan').length}</div>
+            <div class="label">Artikel Kesehatan</div>
+            <div class="change up"><i class="ph ph-read-cv-logo"></i> Tips & info medis</div>
+          </div>
         </div>
       </div>
-      <div class="stat-card" style="--card-color: #F59E0B">
-        <div class="stat-icon" style="background:rgba(245,158,11,0.15); color:#F59E0B">
-          <i class="ph-fill ph-warning"></i>
-        </div>
-        <div class="stat-info">
-          <div class="value">${stokMenipis}</div>
-          <div class="label">Stok Menipis</div>
-          <div class="change" style="color:var(--warning)"><i class="ph ph-arrows-down-up"></i> Perlu perhatian</div>
-        </div>
-      </div>
-    </div>
+    `;
+  }
 
+  const quickActionsHtml = isHtmlAdmin ? `
     <p style="font-weight:700;font-size:15px;margin-bottom:16px;color:var(--text-muted)">⚡ Akses Cepat</p>
     <div class="quick-actions">
       <div class="quick-action-card" onclick="navigate('obat')">
@@ -241,26 +812,25 @@ function renderDashboard() {
         <span>Tambah Pegawai</span>
       </div>
     </div>
-
-    <div class="dashboard-charts">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ph-fill ph-chart-bar"></i> Stok Obat per Kategori</div>
-        </div>
-        <div class="chart-container">
-          <canvas id="chartKategori"></canvas>
-        </div>
+  ` : `
+    <p style="font-weight:700;font-size:15px;margin-bottom:16px;color:var(--text-muted)">⚡ Akses Cepat</p>
+    <div class="quick-actions">
+      <div class="quick-action-card" onclick="navigate('obat')">
+        <div class="qa-icon" style="background:rgba(14,165,233,0.15); color:#0EA5E9"><i class="ph-fill ph-pill"></i></div>
+        <span>Cek Stok Obat</span>
       </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="ph-fill ph-chart-pie"></i> Status Stok Obat</div>
-        </div>
-        <div class="chart-container">
-          <canvas id="chartStatus"></canvas>
-        </div>
+      <div class="quick-action-card" onclick="navigate('pegawai')">
+        <div class="qa-icon" style="background:rgba(99,102,241,0.15); color:#6366F1"><i class="ph-fill ph-users-three"></i></div>
+        <span>Jadwal Dokter / Staf</span>
+      </div>
+      <div class="quick-action-card" onclick="navigate('kesehatan')">
+        <div class="qa-icon" style="background:rgba(16,185,129,0.15); color:#10B981"><i class="ph-fill ph-heart-pulse"></i></div>
+        <span>Tips Info Kesehatan</span>
       </div>
     </div>
+  `;
 
+  const recentLogsHtml = isHtmlAdmin ? `
     <div class="card" style="margin-bottom:20px">
       <div class="card-header">
         <div class="card-title"><i class="ph-fill ph-clock-countdown"></i> Transaksi Obat Terbaru</div>
@@ -290,6 +860,40 @@ function renderDashboard() {
         </table>
       </div>
     </div>
+  ` : '';
+
+  document.getElementById('page-container').innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1>👋 ${isHtmlAdmin ? 'Selamat Datang, Admin!' : 'Selamat Datang di IOS!'}</h1>
+        <p>${isHtmlAdmin ? 'Ringkasan aktivitas Klinik Pratama Kelas I Palembang hari ini' : 'Sistem Informasi Digital Obat & Kesehatan Klinik Pratama Kelas I Palembang'}</p>
+      </div>
+    </div>
+
+    ${alertStrip}
+    ${statsGrid}
+    ${quickActionsHtml}
+
+    <div class="dashboard-charts">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ph-fill ph-chart-bar"></i> Kategori Obat</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartKategori"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ph-fill ph-chart-pie"></i> Ketersediaan Stok</div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chartStatus"></canvas>
+        </div>
+      </div>
+    </div>
+
+    ${recentLogsHtml}
   `;
 
   setTimeout(() => renderDashboardCharts(obat), 100);
@@ -343,42 +947,12 @@ function renderObat() {
   const obat = getData('obat');
   const kategoriSet = [...new Set(obat.map(o => o.kategori))];
 
-  document.getElementById('page-container').innerHTML = `
-    <div class="page-header">
-      <div>
-        <h1>💊 Manajemen Stok Obat</h1>
-        <p>Kelola data stok obat harian — tambah, edit, dan catat transaksi masuk/keluar</p>
-      </div>
-      <button class="btn btn-primary" onclick="showFormTambahObat()"><i class="ph ph-plus"></i> Tambah Obat</button>
-    </div>
+  const isHtmlAdmin = currentRole === 'admin';
+  const addObatBtn = isHtmlAdmin ? `<button class="btn btn-primary" onclick="showFormTambahObat()"><i class="ph ph-plus"></i> Tambah Obat</button>` : '';
+  const headerTitle = isHtmlAdmin ? 'Manajemen Stok Obat' : 'Informasi Stok Obat';
+  const headerDesc = isHtmlAdmin ? 'Kelola data stok obat harian — tambah, edit, dan catat transaksi masuk/keluar' : 'Cari dan pantau ketersediaan stok obat secara real-time';
 
-    <div class="filters">
-      <div class="search-bar">
-        <i class="ph ph-magnifying-glass"></i>
-        <input type="text" id="searchObat" placeholder="Cari nama obat..." oninput="filterObat()" />
-      </div>
-      <select class="form-control" id="filterKategori" onchange="filterObat()" style="width:auto">
-        <option value="">Semua Kategori</option>
-        ${kategoriSet.map(k => `<option value="${k}">${k}</option>`).join('')}
-      </select>
-      <select class="form-control" id="filterStatus" onchange="filterObat()" style="width:auto">
-        <option value="">Semua Status</option>
-        <option value="aman">Stok Aman</option>
-        <option value="menipis">Stok Menipis</option>
-        <option value="habis">Stok Habis</option>
-      </select>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title"><i class="ph-fill ph-list-bullets"></i> Daftar Obat</div>
-        <button class="btn btn-secondary btn-sm" onclick="window.print()"><i class="ph ph-printer"></i> Print</button>
-      </div>
-      <div class="table-wrap" id="tabelObatWrap">
-        ${renderTabelObat(obat)}
-      </div>
-    </div>
-
+  const transactionForm = isHtmlAdmin ? `
     <div class="card" style="margin-top:20px">
       <div class="card-header">
         <div class="card-title"><i class="ph-fill ph-arrows-down-up"></i> Catat Transaksi Obat</div>
@@ -408,70 +982,150 @@ function renderObat() {
       </div>
       <button class="btn btn-primary" onclick="simpanTransaksi()"><i class="ph ph-paper-plane-right"></i> Simpan Transaksi</button>
     </div>
+  ` : '';
+
+  document.getElementById('page-container').innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1>💊 ${headerTitle}</h1>
+        <p>${headerDesc}</p>
+      </div>
+      ${addObatBtn}
+    </div>
+
+    <div class="filters">
+      <div class="search-bar">
+        <i class="ph ph-magnifying-glass"></i>
+        <input type="text" id="searchObat" placeholder="Cari nama obat..." oninput="filterObat()" />
+      </div>
+      <select class="form-control" id="filterKategori" onchange="filterObat()" style="width:auto">
+        <option value="">Semua Kategori</option>
+        ${kategoriSet.map(k => `<option value="${k}">${k}</option>`).join('')}
+      </select>
+      <select class="form-control" id="filterStatus" onchange="filterObat()" style="width:auto">
+        <option value="">Semua Status</option>
+        <option value="aman">Stok Aman</option>
+        <option value="menipis">Stok Menipis</option>
+        <option value="habis">Stok Habis</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="ph-fill ph-list-bullets"></i> Daftar Obat</div>
+        <button class="btn btn-secondary btn-sm" onclick="window.print()"><i class="ph ph-printer"></i> Print</button>
+      </div>
+      <div class="table-wrap" id="tabelObatWrap">
+        ${renderTabelObat(obat)}
+      </div>
+    </div>
+
+    ${transactionForm}
   `;
 }
 
 function renderTabelObat(obat) {
   if (!obat.length) return '<div class="empty-state"><i class="ph ph-pill"></i><p>Belum ada data obat</p></div>';
-  return `
-    <table>
-      <thead>
-        <tr>
-          <th>No</th>
-          <th>Nama Obat</th>
-          <th>Kategori</th>
-          <th>Satuan</th>
-          <th>Stok Masuk</th>
-          <th>Stok Keluar</th>
-          <th>Sisa Stok</th>
-          <th>Min. Stok</th>
-          <th>Expired</th>
-          <th>Kontrol</th>
-          <th>Status</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${obat.map((o, i) => {
-          let statusBadge = '';
-          if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
-          else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
-          else statusBadge = '<span class="badge badge-success">🟢 Aman</span>';
 
-          let kontrolBadge = '<span style="color:var(--text-dim);font-size:12px">—</span>';
-          if (o.controlled && o.kategori === 'Terapi OAT') {
-            kontrolBadge = '<span class="badge-oat">OAT / PMO</span>';
-          } else if (o.controlled) {
-            kontrolBadge = '<span class="badge-controlled">⚠ Psikotropika</span>';
-          }
+  if (currentRole === 'admin') {
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Nama Obat</th>
+            <th>Kategori</th>
+            <th>Satuan</th>
+            <th>Tgl Masuk</th>
+            <th>Stok Masuk</th>
+            <th>Stok Keluar</th>
+            <th>Sisa Stok</th>
+            <th>Min. Stok</th>
+            <th>Expired</th>
+            <th>Kontrol</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${obat.map((o, i) => {
+            let statusBadge = '';
+            if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
+            else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
+            else statusBadge = '<span class="badge badge-success">🟢 Aman</span>';
 
-          return `
-            <tr class="${o.controlled ? 'row-controlled' : ''}">
-              <td style="color:var(--text-muted)">${i+1}</td>
-              <td>
-                <b>${o.nama}</b>
-                ${o.keterangan ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px">${o.keterangan}</div>` : ''}
-              </td>
-              <td><span class="badge badge-info">${o.kategori}</span></td>
-              <td>${o.satuan}</td>
-              <td style="color:#10B981;font-weight:600">${o.masuk}</td>
-              <td style="color:#F59E0B;font-weight:600">${o.keluar}</td>
-              <td style="font-weight:700;font-size:16px">${o.stok}</td>
-              <td style="color:var(--text-muted)">${o.minStok}</td>
-              <td style="color:var(--text-muted);font-size:13px">${o.expired}</td>
-              <td>${kontrolBadge}</td>
-              <td>${statusBadge}</td>
-              <td>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-secondary btn-sm btn-icon" onclick="editObat(${o.id})" title="Edit"><i class="ph ph-pencil-simple"></i></button>
-                  <button class="btn btn-danger btn-sm btn-icon" onclick="hapusObat(${o.id})" title="Hapus"><i class="ph ph-trash"></i></button>
-                </div>
-              </td>
-            </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-  `;
+            let kontrolBadge = '<span style="color:var(--text-dim);font-size:12px">—</span>';
+            if (o.controlled && o.kategori === 'Terapi OAT') {
+              kontrolBadge = '<span class="badge-oat">OAT / PMO</span>';
+            } else if (o.controlled) {
+              kontrolBadge = '<span class="badge-controlled">⚠ Psikotropika</span>';
+            }
+
+            return `
+              <tr class="${o.controlled ? 'row-controlled' : ''}">
+                <td style="color:var(--text-muted)">${i+1}</td>
+                <td>
+                  <b>${o.nama}</b>
+                  ${o.keterangan ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px">${o.keterangan}</div>` : ''}
+                </td>
+                <td><span class="badge badge-info">${o.kategori}</span></td>
+                <td>${o.satuan}</td>
+                <td style="color:var(--text-muted);font-size:12px">${o.tanggalMasuk || o.tanggal || '—'}</td>
+                <td style="color:#10B981;font-weight:600">${o.masuk}</td>
+                <td style="color:#F59E0B;font-weight:600">${o.keluar}</td>
+                <td style="font-weight:700;font-size:16px">${o.stok}</td>
+                <td style="color:var(--text-muted)">${o.minStok}</td>
+                <td style="color:var(--text-muted);font-size:13px">${o.expired}</td>
+                <td>${kontrolBadge}</td>
+                <td>${statusBadge}</td>
+                <td>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn-secondary btn-sm btn-icon" onclick="editObat(${o.id})" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+                    <button class="btn btn-danger btn-sm btn-icon" onclick="hapusObat(${o.id})" title="Hapus"><i class="ph ph-trash"></i></button>
+                  </div>
+                </td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    // Tampilan Publik
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Nama Obat</th>
+            <th>Kategori</th>
+            <th>Satuan</th>
+            <th>Ketersediaan</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${obat.map((o, i) => {
+            let statusBadge = '';
+            if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
+            else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
+            else statusBadge = '<span class="badge badge-success">🟢 Tersedia</span>';
+
+            return `
+              <tr>
+                <td style="color:var(--text-muted)">${i+1}</td>
+                <td>
+                  <b>${o.nama}</b>
+                </td>
+                <td><span class="badge badge-info">${o.kategori}</span></td>
+                <td>${o.satuan}</td>
+                <td style="font-weight:700;font-size:15px">${o.stok > 0 ? o.stok : 'Kosong'}</td>
+                <td>${statusBadge}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
 }
 
 function filterObat() {
@@ -489,7 +1143,14 @@ function filterObat() {
 
 function showFormTambahObat(obatData = null) {
   const isEdit = !!obatData;
-  const o = obatData || { nama:'', kategori:'', satuan:'', masuk:0, keluar:0, stok:0, minStok:20, expired:'', tanggal: new Date().toISOString().split('T')[0] };
+  const today  = new Date().toISOString().split('T')[0];
+  const o = obatData || { nama:'', kategori:'', satuan:'', masuk:0, keluar:0, stok:0, minStok:20, expired:'', tanggalMasuk: today, tanggal: today };
+  // Pastikan tanggalMasuk ada (data lama mungkin tidak punya field ini)
+  if (!o.tanggalMasuk) o.tanggalMasuk = o.tanggal || today;
+  const defaultKategori = ['Antibiotik','Analgesik','Vitamin','Antasida','Antidiabetik','Lambung','Antihistamin','Bronkodilator','Psikotropika','OAT'];
+  const isCustomKat = o.kategori && !defaultKategori.includes(o.kategori);
+  const selectedKat = isCustomKat ? 'Lainnya' : (o.kategori || 'Analgesik');
+
   openModal(isEdit ? 'Edit Data Obat' : 'Tambah Obat Baru', `
     <div class="form-row">
       <div class="form-group">
@@ -498,10 +1159,14 @@ function showFormTambahObat(obatData = null) {
       </div>
       <div class="form-group">
         <label>Kategori</label>
-        <select class="form-control" id="fKat">
-          ${['Antibiotik','Analgesik','Vitamin','Antasida','Antidiabetik','Lambung','Antihistamin','Bronkodilator','Lainnya'].map(k =>
-            `<option value="${k}" ${o.kategori===k?'selected':''}>${k}</option>`).join('')}
+        <select class="form-control" id="fKat" onchange="toggleKatCustom()">
+          ${[...defaultKategori, 'Lainnya'].map(k =>
+            `<option value="${k}" ${selectedKat===k?'selected':''}>${k}</option>`).join('')}
         </select>
+        <input class="form-control" id="fKatCustom"
+          placeholder="Ketik nama kategori baru..."
+          value="${isCustomKat ? o.kategori : ''}"
+          style="margin-top:8px;display:${isCustomKat ? 'block' : 'none'}" />
       </div>
     </div>
     <div class="form-row">
@@ -527,9 +1192,15 @@ function showFormTambahObat(obatData = null) {
         <input type="number" class="form-control" id="fKeluar" value="${o.keluar}" />
       </div>
     </div>
-    <div class="form-group">
-      <label>Tanggal Expired</label>
-      <input type="date" class="form-control" id="fExp" value="${o.expired}" />
+    <div class="form-row">
+      <div class="form-group">
+        <label><i class="ph ph-calendar-plus" style="color:var(--primary)"></i> Tanggal Masuk</label>
+        <input type="date" class="form-control" id="fTanggalMasuk" value="${o.tanggalMasuk}" />
+      </div>
+      <div class="form-group">
+        <label><i class="ph ph-calendar-x" style="color:var(--danger)"></i> Tanggal Expired</label>
+        <input type="date" class="form-control" id="fExp" value="${o.expired}" />
+      </div>
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="simpanObat(${isEdit ? o.id : 'null'})">
       <i class="ph ph-floppy-disk"></i> ${isEdit ? 'Simpan Perubahan' : 'Tambah Obat'}
@@ -537,14 +1208,31 @@ function showFormTambahObat(obatData = null) {
   `);
 }
 
+// Tampilkan / sembunyikan field kategori custom saat pilih 'Lainnya'
+window.toggleKatCustom = function() {
+  const sel    = document.getElementById('fKat');
+  const custom = document.getElementById('fKatCustom');
+  if (!sel || !custom) return;
+  if (sel.value === 'Lainnya') {
+    custom.style.display = 'block';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
+};
+
 function simpanObat(editId) {
-  const nama = document.getElementById('fNama').value.trim();
-  const kat = document.getElementById('fKat').value;
-  const sat = document.getElementById('fSat').value;
-  const minStok = parseInt(document.getElementById('fMinStok').value) || 0;
-  const masuk = parseInt(document.getElementById('fMasuk').value) || 0;
-  const keluar = parseInt(document.getElementById('fKeluar').value) || 0;
-  const exp = document.getElementById('fExp').value;
+  const nama         = document.getElementById('fNama').value.trim();
+  const katSel       = document.getElementById('fKat').value;
+  const katCustom    = (document.getElementById('fKatCustom')?.value || '').trim();
+  const kat          = katSel === 'Lainnya' ? (katCustom || 'Lainnya') : katSel;
+  const sat          = document.getElementById('fSat').value;
+  const minStok      = parseInt(document.getElementById('fMinStok').value) || 0;
+  const masuk        = parseInt(document.getElementById('fMasuk').value) || 0;
+  const keluar       = parseInt(document.getElementById('fKeluar').value) || 0;
+  const exp          = document.getElementById('fExp').value;
+  const tanggalMasuk = document.getElementById('fTanggalMasuk').value || new Date().toISOString().split('T')[0];
 
   if (!nama) { showToast('Nama obat wajib diisi!', true); return; }
 
@@ -559,11 +1247,11 @@ function simpanObat(editId) {
   let savedObat;
 
   if (editId) {
-    obat = obat.map(o => o.id === editId ? {...o, nama, kategori:kat, satuan:sat, minStok, masuk, keluar, stok, expired:exp} : o);
+    obat = obat.map(o => o.id === editId ? {...o, nama, kategori:kat, satuan:sat, minStok, masuk, keluar, stok, expired:exp, tanggalMasuk} : o);
     savedObat = obat.find(o => o.id === editId);
     showToast('✅ Data obat berhasil diperbarui!');
   } else {
-    savedObat = { id: getNextId(obat), nama, kategori:kat, satuan:sat, masuk, keluar, stok, minStok, expired:exp, tanggal: new Date().toISOString().split('T')[0] };
+    savedObat = { id: getNextId(obat), nama, kategori:kat, satuan:sat, masuk, keluar, stok, minStok, expired:exp, tanggalMasuk, tanggal: tanggalMasuk };
     obat.push(savedObat);
     showToast('✅ Obat baru berhasil ditambahkan!');
   }
@@ -635,13 +1323,18 @@ function renderPegawai() {
   const pegawai = getData('pegawai');
   const jabatanSet = [...new Set(pegawai.map(p => p.jabatan))];
 
+  const isHtmlAdmin = currentRole === 'admin';
+  const addPegawaiBtn = isHtmlAdmin ? `<button class="btn btn-primary" onclick="showFormTambahPegawai()"><i class="ph ph-user-plus"></i> Tambah Pegawai</button>` : '';
+  const headerTitle = isHtmlAdmin ? 'Data Pegawai Klinik' : 'Staf Medis Klinik';
+  const headerDesc = isHtmlAdmin ? 'Kelola informasi dokter, perawat, apoteker, dan admin klinik' : 'Informasi jadwal tugas dokter, perawat, dan staf medis klinik';
+
   document.getElementById('page-container').innerHTML = `
     <div class="page-header">
       <div>
-        <h1>👨‍⚕️ Data Pegawai Klinik</h1>
-        <p>Kelola informasi dokter, perawat, apoteker, dan admin klinik</p>
+        <h1>👨‍⚕️ ${headerTitle}</h1>
+        <p>${headerDesc}</p>
       </div>
-      <button class="btn btn-primary" onclick="showFormTambahPegawai()"><i class="ph ph-user-plus"></i> Tambah Pegawai</button>
+      ${addPegawaiBtn}
     </div>
 
     <div class="filters">
@@ -669,8 +1362,20 @@ function renderPegawai() {
 function renderKartuPegawai(pegawai) {
   if (!pegawai.length) return '<div class="empty-state" style="grid-column:1/-1"><i class="ph ph-users"></i><p>Belum ada data pegawai</p></div>';
   const jabatanColors = { 'Dokter Spesialis': '#818CF8', 'Dokter Umum': '#0EA5E9', 'Perawat': '#10B981', 'Apoteker': '#F59E0B', 'Admin': '#EC4899' };
-  return pegawai.map(p => {
+
+  // Sembunyikan staf Admin dari publik demi privasi & keamanan IT
+  const list = currentRole === 'admin' ? pegawai : pegawai.filter(p => p.jabatan !== 'Admin');
+
+  return list.map(p => {
     const color = jabatanColors[p.jabatan] || '#94A3B8';
+    const phoneHtml = currentRole === 'admin' ? `<div class="pegawai-detail"><i class="ph ph-phone"></i> ${p.hp}</div>` : '';
+    const actionsHtml = currentRole === 'admin' ? `
+      <div class="pegawai-actions">
+        <button class="btn btn-secondary btn-sm btn-icon" onclick="editPegawai(${p.id})" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="hapusPegawai(${p.id})" title="Hapus"><i class="ph ph-trash"></i></button>
+      </div>
+    ` : '';
+
     return `
       <div class="pegawai-card">
         <div class="pegawai-avatar" style="background: linear-gradient(135deg, ${color}, ${color}99)">${p.inisial}</div>
@@ -678,12 +1383,9 @@ function renderKartuPegawai(pegawai) {
         <div class="pegawai-jabatan" style="color:${color}">${p.jabatan}</div>
         <div class="pegawai-detail"><i class="ph ph-stethoscope"></i> ${p.spesialisasi}</div>
         <div class="pegawai-detail"><i class="ph ph-calendar-blank"></i> ${p.jadwal}</div>
-        <div class="pegawai-detail"><i class="ph ph-phone"></i> ${p.hp}</div>
+        ${phoneHtml}
         <span class="badge ${p.status === 'Aktif' ? 'badge-success' : 'badge-warning'}">${p.status === 'Aktif' ? '● Aktif' : '○ Izin'}</span>
-        <div class="pegawai-actions">
-          <button class="btn btn-secondary btn-sm btn-icon" onclick="editPegawai(${p.id})" title="Edit"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="hapusPegawai(${p.id})" title="Hapus"><i class="ph ph-trash"></i></button>
-        </div>
+        ${actionsHtml}
       </div>
     `;
   }).join('');
@@ -800,13 +1502,17 @@ function hapusPegawai(id) {
 // KESEHATAN PAGE
 // ============================================================
 function renderKesehatan() {
-  const kategoriSet = [...new Set(DUMMY_KESEHATAN.map(a => a.kategori))];
+  const kesehatan = getData('kesehatan');
+  const kategoriSet = [...new Set(kesehatan.map(a => a.kategori))];
+  const isHtmlAdmin = currentRole === 'admin';
+  
   document.getElementById('page-container').innerHTML = `
     <div class="page-header">
       <div>
         <h1>❤️ Informasi Kesehatan</h1>
         <p>Artikel tips kesehatan, panduan penyakit, dan informasi medis terkini</p>
       </div>
+      ${isHtmlAdmin ? `<button class="btn btn-primary" onclick="showFormArtikel()"><i class="ph ph-plus"></i> Tambah Artikel</button>` : ''}
     </div>
 
     <div class="filters">
@@ -821,44 +1527,290 @@ function renderKesehatan() {
     </div>
 
     <div class="artikel-grid" id="artikelGrid">
-      ${renderKartuArtikel(DUMMY_KESEHATAN)}
+      ${renderKartuArtikel(kesehatan)}
     </div>
   `;
 }
 
 function renderKartuArtikel(data) {
-  return data.map(a => `
-    <div class="artikel-card" onclick="showArtikel(${a.id})">
-      <div class="artikel-img" style="background:${a.bg}">${a.emoji}</div>
-      <div class="artikel-body">
-        <div class="artikel-category">${a.kategori}</div>
-        <div class="artikel-title">${a.judul}</div>
-        <div class="artikel-excerpt">${a.excerpt}</div>
-        <div style="margin-top:12px;font-size:12px;color:var(--text-dim)">${a.tanggal}</div>
+  return data.map(a => {
+    const isHtmlAdmin = currentRole === 'admin';
+    const hasImage = a.image ? true : false;
+    const imgStyle = hasImage ? `background: url('${a.image}') center/cover;` : `background: ${a.bg};`;
+    const emojiHtml = hasImage ? '' : a.emoji;
+    
+    const adminActions = isHtmlAdmin ? `
+      <div class="artikel-card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:10" onclick="event.stopPropagation()">
+        <button class="btn-icon" onclick="showFormArtikel(${a.id})" style="background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);color:white;border:none;border-radius:6px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Edit"><i class="ph ph-pencil-simple" style="font-size:16px"></i></button>
+        <button class="btn-icon" onclick="hapusArtikel(${a.id})" style="background:rgba(239,68,68,0.9);backdrop-filter:blur(4px);color:white;border:none;border-radius:6px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Hapus"><i class="ph ph-trash" style="font-size:16px"></i></button>
       </div>
-    </div>
-  `).join('');
+    ` : '';
+
+    return `
+      <div class="artikel-card" onclick="showArtikel(${a.id})" style="position:relative">
+        ${adminActions}
+        <div class="artikel-img" style="${imgStyle}">${emojiHtml}</div>
+        <div class="artikel-body">
+          <div class="artikel-category">${a.kategori}</div>
+          <div class="artikel-title">${a.judul}</div>
+          <div class="artikel-excerpt">${a.excerpt}</div>
+          <div style="margin-top:12px;font-size:12px;color:var(--text-dim)">${a.tanggal}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function filterArtikel() {
   const q = document.getElementById('searchArtikel').value.toLowerCase();
   const kat = document.getElementById('filterKatArtikel').value;
-  let data = DUMMY_KESEHATAN;
+  const kesehatan = getData('kesehatan');
+  let data = kesehatan;
   if (q) data = data.filter(a => a.judul.toLowerCase().includes(q) || a.excerpt.toLowerCase().includes(q));
   if (kat) data = data.filter(a => a.kategori === kat);
   document.getElementById('artikelGrid').innerHTML = renderKartuArtikel(data);
 }
 
 function showArtikel(id) {
-  const a = DUMMY_KESEHATAN.find(x => x.id === id);
+  const kesehatan = getData('kesehatan');
+  const a = kesehatan.find(x => x.id === id);
   if (!a) return;
+  
+  const headerHtml = a.image ? 
+    `<div style="width:100%;height:240px;border-radius:12px;background:url('${a.image}') center/cover;margin-bottom:16px;box-shadow:var(--shadow)"></div>` :
+    `<div style="background:${a.bg};border-radius:12px;padding:35px;text-align:center;font-size:48px;margin-bottom:16px">${a.emoji}</div>`;
+
+  const isHtmlAdmin = currentRole === 'admin';
+  const adminFooterHtml = isHtmlAdmin ? `
+    <div style="margin-top:20px;padding-top:15px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:end;gap:10px">
+      <button class="btn btn-secondary" onclick="closeModal(); showFormArtikel(${a.id})"><i class="ph ph-pencil-simple"></i> Edit Artikel</button>
+      <button class="btn btn-danger" onclick="closeModal(); hapusArtikel(${a.id})"><i class="ph ph-trash"></i> Hapus</button>
+    </div>
+  ` : '';
+
   openModal(a.judul, `
-    <div style="background:${a.bg};border-radius:12px;padding:30px;text-align:center;font-size:48px;margin-bottom:16px">${a.emoji}</div>
+    ${headerHtml}
     <span class="badge badge-info" style="margin-bottom:12px">${a.kategori}</span>
     <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px">📅 ${a.tanggal}</p>
-    <p style="line-height:1.8;font-size:14px">${a.konten}</p>
+    <div style="line-height:1.8;font-size:14px;white-space:pre-wrap;color:var(--text)">${a.konten}</div>
+    ${adminFooterHtml}
   `);
 }
+
+function showFormArtikel(id) {
+  const kesehatan = getData('kesehatan');
+  const a = id ? kesehatan.find(x => x.id === id) : null;
+  const isEdit = !!a;
+  const categories = [...new Set(kesehatan.map(x => x.kategori))];
+
+  openModal(isEdit ? 'Edit Artikel Kesehatan' : 'Tambah Artikel Baru', `
+    <div class="form-container" style="display:flex;flex-direction:column;gap:14px;max-width:100%;box-sizing:border-box">
+      <input type="hidden" id="artBase64Data" value="${isEdit && a.image ? a.image : ''}" />
+      
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label>Judul Artikel</label>
+          <input type="text" class="form-control" id="artJudul" value="${isEdit ? a.judul : ''}" placeholder="Masukkan judul..." required />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Kategori</label>
+          <input type="text" class="form-control" id="artKategori" value="${isEdit ? a.kategori : ''}" placeholder="Misal: Dermatologi..." list="artKatList" required />
+          <datalist id="artKatList">
+            ${categories.map(c => `<option value="${c}">`).join('')}
+          </datalist>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>Emoji (Ikon Fallback)</label>
+          <input type="text" class="form-control" id="artEmoji" value="${isEdit ? a.emoji : '🔬'}" placeholder="🔬" style="text-align:center" />
+        </div>
+        <div class="form-group" style="flex:3">
+          <label>Cover Artikel (Upload Gambar)</label>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input type="file" id="artImageInput" accept="image/*" style="display:none" onchange="prosesUploadGambarArtikel(this)" />
+            <button class="btn btn-secondary" onclick="document.getElementById('artImageInput').click()"><i class="ph ph-upload-simple"></i> Pilih File Gambar</button>
+            <button class="btn btn-danger" onclick="hapusGambarArtikelUploaded()" style="padding:10px"><i class="ph ph-trash"></i> Hapus Gambar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Preview Media Cover</label>
+        <div style="width:100%;height:150px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <img id="artImagePreview" src="${isEdit && a.image ? a.image : ''}" style="width:100%;height:100%;object-fit:cover;display:${isEdit && a.image ? 'block' : 'none'}" />
+          <div id="artFallbackPreview" style="display:${isEdit && a.image ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:36px;width:100%;height:100%;background:${isEdit ? a.bg : 'linear-gradient(135deg, #1a2a3a, #0ea5e9)'}">
+            <span id="artFallbackEmoji">${isEdit ? a.emoji : '🔬'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Ringkasan Pendek (Excerpt)</label>
+        <input type="text" class="form-control" id="artExcerpt" value="${isEdit ? a.excerpt : ''}" placeholder="Tuliskan ringkasan singkat artikel..." required />
+      </div>
+
+      <div class="form-group">
+        <label>Isi Konten Artikel</label>
+        <textarea class="form-control" id="artKonten" rows="8" placeholder="Tuliskan isi konten kesehatan secara mendalam..." style="resize:vertical" required>${isEdit ? a.konten : ''}</textarea>
+      </div>
+
+      <button class="btn btn-primary" onclick="simpanArtikel(${isEdit ? a.id : 'null'})" style="width:100%;margin-top:10px">
+        <i class="ph ph-floppy-disk"></i> Simpan Artikel
+      </button>
+    </div>
+  `);
+
+  document.getElementById('artEmoji').addEventListener('input', (e) => {
+    const fallbackEmoji = document.getElementById('artFallbackEmoji');
+    if (fallbackEmoji) fallbackEmoji.innerText = e.target.value || '🔬';
+  });
+}
+
+function simpanArtikel(id) {
+  const judul = document.getElementById('artJudul').value.trim();
+  const kategori = document.getElementById('artKategori').value.trim();
+  const emoji = document.getElementById('artEmoji').value.trim() || '🔬';
+  const image = document.getElementById('artBase64Data').value;
+  const excerpt = document.getElementById('artExcerpt').value.trim();
+  const konten = document.getElementById('artKonten').value;
+
+  if (!judul || !kategori || !excerpt || !konten) {
+    showToast('❌ Mohon lengkapi seluruh field wajib!', true);
+    return;
+  }
+
+  const kesehatan = getData('kesehatan');
+  const options = { day: 'numeric', month: 'short', year: 'numeric' };
+  const formatter = new Intl.DateTimeFormat('id-ID', options);
+  const parts = formatter.formatToParts(new Date());
+  const day = parts.find(p => p.type === 'day').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const year = parts.find(p => p.type === 'year').value;
+  const paddedDay = day.padStart(2, '0');
+  const tanggal = `${paddedDay} ${month} ${year}`;
+
+  const GRADIENTS = [
+    'linear-gradient(135deg, #1a2a3a, #0ea5e9)',
+    'linear-gradient(135deg, #2a1a1a, #ef4444)',
+    'linear-gradient(135deg, #1a1a3a, #6366f1)',
+    'linear-gradient(135deg, #2a1a2a, #ec4899)',
+    'linear-gradient(135deg, #1a3a2a, #10b981)',
+    'linear-gradient(135deg, #3a2a1a, #f59e0b)'
+  ];
+
+  if (id === null) {
+    const newId = getNextId(kesehatan);
+    const bg = GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)];
+    const newArticle = {
+      id: newId,
+      judul,
+      kategori,
+      emoji,
+      bg,
+      excerpt,
+      konten,
+      tanggal,
+      image: image || undefined
+    };
+    kesehatan.push(newArticle);
+    saveData('kesehatan', kesehatan);
+    SyncManager.enqueue('kesehatan', 'upsert', newArticle);
+    showToast('✅ Artikel baru berhasil ditambahkan!');
+  } else {
+    const idx = kesehatan.findIndex(x => x.id === id);
+    if (idx >= 0) {
+      kesehatan[idx].judul = judul;
+      kesehatan[idx].kategori = kategori;
+      kesehatan[idx].emoji = emoji;
+      kesehatan[idx].excerpt = excerpt;
+      kesehatan[idx].konten = konten;
+      kesehatan[idx].image = image || undefined;
+      saveData('kesehatan', kesehatan);
+      SyncManager.enqueue('kesehatan', 'upsert', kesehatan[idx]);
+      showToast('✅ Artikel berhasil diperbarui!');
+    }
+  }
+
+  closeModal();
+  renderKesehatan();
+}
+
+function hapusArtikel(id) {
+  if (!confirm('Yakin ingin menghapus artikel kesehatan ini?')) return;
+
+  const kesehatan = getData('kesehatan');
+  const idx = kesehatan.findIndex(x => x.id === id);
+  if (idx >= 0) {
+    const removed = kesehatan.splice(idx, 1)[0];
+    saveData('kesehatan', kesehatan);
+    SyncManager.enqueue('kesehatan', 'delete', { id });
+    showToast('🗑️ Artikel berhasil dihapus!');
+    renderKesehatan();
+  }
+}
+
+window.prosesUploadGambarArtikel = function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 600;
+      const MAX_HEIGHT = 450;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      
+      const preview = document.getElementById('artImagePreview');
+      if (preview) {
+        preview.src = base64;
+        preview.style.display = 'block';
+        
+        const fallbackPrev = document.getElementById('artFallbackPreview');
+        if (fallbackPrev) fallbackPrev.style.display = 'none';
+      }
+      document.getElementById('artBase64Data').value = base64;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.hapusGambarArtikelUploaded = function() {
+  const preview = document.getElementById('artImagePreview');
+  if (preview) {
+    preview.src = '';
+    preview.style.display = 'none';
+  }
+  const fallbackPrev = document.getElementById('artFallbackPreview');
+  if (fallbackPrev) fallbackPrev.style.display = 'flex';
+  
+  document.getElementById('artBase64Data').value = '';
+  document.getElementById('artImageInput').value = '';
+};
 
 // ============================================================
 // LAPORAN PAGE
@@ -1028,7 +1980,7 @@ function renderPengaturan() {
         </div>
         <div class="form-group">
           <label>Unit Pelaksana Teknis (UPT)</label>
-          <input class="form-control" id="kUPT" value="Lapas Kelas I Palembang — Ditjenpas Kemenkumham" />
+          <input class="form-control" id="kUPT" value="Lapas Kelas I Palembang — Ditjenpas Kemenimipas" />
         </div>
       </div>
       <button class="btn btn-primary" onclick="showToast('✅ Profil klinik berhasil disimpan!')"><i class="ph ph-floppy-disk"></i> Simpan Profil</button>
@@ -1111,10 +2063,20 @@ function renderPengaturan() {
     <div class="settings-section">
       <h3><i class="ph-fill ph-database"></i> Manajemen Data Lokal</h3>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="pushSemuaData()" style="background:linear-gradient(135deg,#10B981,#0ea5e9)"><i class="ph ph-cloud-arrow-up"></i> Upload Semua Data ke Sheets</button>
         <button class="btn btn-secondary" onclick="exportData()"><i class="ph ph-export"></i> Export Data JSON</button>
         <button class="btn btn-danger" onclick="resetData()"><i class="ph ph-trash"></i> Reset ke Data Awal</button>
       </div>
       <p style="font-size:12px;color:var(--text-muted);margin-top:12px">⚠️ Reset akan menghapus semua perubahan dan mengembalikan data ke kondisi data dummy awal. Antrian sinkronisasi juga akan dibersihkan.</p>
+    </div>
+
+    <!-- MANAJEMEN AKUN ADMIN -->
+    <div class="settings-section">
+      <h3><i class="ph-fill ph-users"></i> Manajemen Akun Admin</h3>
+      <div id="accountList">${renderAccountList()}</div>
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" onclick="showFormAkun(null)"><i class="ph ph-user-plus"></i> Tambah Akun Baru</button>
+      </div>
     </div>
 
     <!-- TENTANG -->
@@ -1123,7 +2085,7 @@ function renderPengaturan() {
       <p style="font-size:14px;color:var(--text-muted);line-height:2">
         <b style="color:var(--primary);font-size:22px">IOS</b> — Informasi Obat dan Kesehatan Pemasyarakatan<br>
         Sistem Informasi Digital Klinik Lapas / Rutan<br>
-        Kementerian Hukum dan Hak Asasi Manusia — Ditjenpas<br><br>
+        Kementerian Imigrasi dan Pemasyarakatan — Ditjenpas<br><br>
         <span style="color:var(--secondary)">Versi 2.0.0</span> &nbsp;|&nbsp; Juni 2026 &nbsp;|&nbsp;
         HTML · CSS · JavaScript · Google Sheets API<br>
         <span style="font-size:12px;color:var(--text-dim)">
@@ -1132,6 +2094,151 @@ function renderPengaturan() {
       </p>
     </div>
   `;
+}
+
+function renderAccountList() {
+  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+  if (accounts.length === 0) return '<p style="color:var(--text-muted);font-size:13px">Belum ada akun.</p>';
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+      ${accounts.map(a => `
+        <div style="display:flex;align-items:center;gap:14px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
+          <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:16px;flex-shrink:0">
+            ${a.nama.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px">${a.nama}</div>
+            <div style="font-size:12px;color:var(--text-muted)">@${a.username} &middot; ${a.role}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" style="padding:8px 12px;font-size:12px" onclick="showFormAkun(${a.id})"><i class="ph ph-pencil-simple"></i> Edit</button>
+            ${accounts.length > 1 ? `<button class="btn btn-danger" style="padding:8px 12px;font-size:12px" onclick="hapusAkun(${a.id})"><i class="ph ph-trash"></i></button>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function showFormAkun(id) {
+  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+  const a = id ? accounts.find(x => x.id === id) : null;
+  const isEdit = !!a;
+
+  openModal(isEdit ? 'Edit Akun Admin' : 'Tambah Akun Admin Baru', `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label>Nama Lengkap</label>
+        <input type="text" class="form-control" id="akNama" value="${isEdit ? a.nama : ''}" placeholder="Nama tampilan..." required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username / ID Login</label>
+          <input type="text" class="form-control" id="akUsername" value="${isEdit ? a.username : ''}" placeholder="username..." autocomplete="off" required />
+        </div>
+        <div class="form-group">
+          <label>Role / Jabatan</label>
+          <input type="text" class="form-control" id="akRole" value="${isEdit ? a.role : 'Admin'}" placeholder="Super Admin / Admin..." />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>${isEdit ? 'Password Baru (kosongkan jika tidak diubah)' : 'Password'}</label>
+        <div style="position:relative">
+          <input type="password" class="form-control" id="akPassword" placeholder="${isEdit ? 'Isi untuk mengganti password...' : 'Minimal 6 karakter...'}" autocomplete="new-password" style="padding-right:44px" />
+          <button type="button" onclick="toggleAkunPasswordVis()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px">
+            <i class="ph ph-eye" id="akPwEyeIcon"></i>
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="simpanAkun(${isEdit ? a.id : 'null'})" style="width:100%;margin-top:4px">
+        <i class="ph ph-floppy-disk"></i> ${isEdit ? 'Simpan Perubahan' : 'Buat Akun'}
+      </button>
+    </div>
+  `);
+}
+
+function toggleAkunPasswordVis() {
+  const input = document.getElementById('akPassword');
+  const icon = document.getElementById('akPwEyeIcon');
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+  icon.className = input.type === 'password' ? 'ph ph-eye' : 'ph ph-eye-slash';
+}
+
+function simpanAkun(id) {
+  const nama = (document.getElementById('akNama').value || '').trim();
+  const username = (document.getElementById('akUsername').value || '').trim();
+  const role = (document.getElementById('akRole').value || 'Admin').trim();
+  const password = (document.getElementById('akPassword').value || '').trim();
+
+  if (!nama || !username) {
+    showToast('❌ Nama dan username wajib diisi!', true);
+    return;
+  }
+
+  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+
+  // Check username uniqueness (ignore self on edit)
+  const duplicate = accounts.find(a => a.username === username && a.id !== id);
+  if (duplicate) {
+    showToast('❌ Username sudah digunakan akun lain!', true);
+    return;
+  }
+
+  if (id === null) {
+    // New account
+    if (!password || password.length < 6) {
+      showToast('❌ Password minimal 6 karakter!', true);
+      return;
+    }
+    const newId = accounts.length > 0 ? Math.max(...accounts.map(a => a.id)) + 1 : 1;
+    const today = new Date().toISOString().slice(0, 10);
+    accounts.push({ id: newId, username, password, nama, role, createdAt: today });
+    localStorage.setItem('ios_accounts', JSON.stringify(accounts));
+    showToast('✅ Akun baru berhasil dibuat!');
+  } else {
+    const idx = accounts.findIndex(a => a.id === id);
+    if (idx >= 0) {
+      accounts[idx].nama = nama;
+      accounts[idx].username = username;
+      accounts[idx].role = role;
+      if (password) {
+        if (password.length < 6) {
+          showToast('❌ Password minimal 6 karakter!', true);
+          return;
+        }
+        accounts[idx].password = password;
+        // Update session if editing self
+        if (currentAdminUser && currentAdminUser.id === id) {
+          currentAdminUser = accounts[idx];
+          sessionStorage.setItem('ios_admin_user', JSON.stringify(accounts[idx]));
+        }
+      }
+      localStorage.setItem('ios_accounts', JSON.stringify(accounts));
+      showToast('✅ Akun berhasil diperbarui!');
+    }
+  }
+
+  closeModal();
+  // Refresh account list in settings
+  const listEl = document.getElementById('accountList');
+  if (listEl) listEl.innerHTML = renderAccountList();
+  renderSidebarFooter();
+}
+
+function hapusAkun(id) {
+  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+  if (accounts.length <= 1) {
+    showToast('❌ Minimal harus ada 1 akun admin!', true);
+    return;
+  }
+  if (!confirm('Yakin ingin menghapus akun ini?')) return;
+  const filtered = accounts.filter(a => a.id !== id);
+  localStorage.setItem('ios_accounts', JSON.stringify(filtered));
+  showToast('🗑️ Akun berhasil dihapus!');
+  const listEl = document.getElementById('accountList');
+  if (listEl) listEl.innerHTML = renderAccountList();
 }
 
 function renderSyncLog() {
@@ -1194,15 +2301,81 @@ function exportData() {
   showToast('✅ Data berhasil diekspor!');
 }
 
+async function pushSemuaData() {
+  if (!confirm('Apakah Anda ingin mengunggah seluruh data lokal saat ini ke Google Sheets? Ini akan menimpa/memperbarui data di Google Sheets dengan data dari aplikasi Anda.')) return;
+  
+  const obat = getData('obat');
+  const pegawai = getData('pegawai');
+  const log = getData('log');
+  
+  showToast('🔄 Mempersiapkan data untuk diunggah...');
+  
+  // Enqueue all
+  obat.forEach(o => SyncManager.enqueue('obat', 'upsert', o));
+  pegawai.forEach(p => SyncManager.enqueue('pegawai', 'upsert', p));
+  log.forEach(l => SyncManager.enqueue('log', 'upsert', l));
+  
+  showToast('🔄 Mengunggah data ke Google Sheets...');
+  const r = await SyncManager.push();
+  if (r.ok) {
+    showToast('✅ Semua data berhasil diunggah ke Google Sheets!');
+    renderPengaturan();
+  } else {
+    showToast('❌ Gagal mengunggah data: ' + r.reason, true);
+  }
+}
+
 function resetData() {
   if (!confirm('Yakin ingin mereset semua data ke data awal? Semua perubahan & antrian sinkronisasi akan hilang!')) return;
   localStorage.removeItem('ios_obat');
   localStorage.removeItem('ios_pegawai');
   localStorage.removeItem('ios_log');
+  localStorage.removeItem('ios_kesehatan');
   localStorage.removeItem('ios_sync_queue');
   localStorage.removeItem('ios_sync_log');
   localStorage.removeItem('ios_sync_meta');
   initData();
   showToast('✅ Data & antrian sinkronisasi berhasil direset!');
   if (currentPage === 'pengaturan') renderPengaturan();
+}
+
+// Upload SEMUA data lokal ke Google Sheets (override cloud dengan data lokal)
+async function pushSemuaData() {
+  const url = localStorage.getItem('ios_gas_url');
+  if (!url) {
+    showToast('❌ URL Google Apps Script belum diatur di Pengaturan!', true);
+    return;
+  }
+
+  if (!confirm('Upload semua data lokal ke Google Sheets?\nData di Sheets akan digantikan dengan data lokal saat ini.')) return;
+
+  showToast('🔄 Mengupload semua data ke Google Sheets...');
+
+  // Buat antrian dari semua data lokal
+  const obat      = JSON.parse(localStorage.getItem('ios_obat')      || '[]');
+  const pegawai   = JSON.parse(localStorage.getItem('ios_pegawai')   || '[]');
+  const log       = JSON.parse(localStorage.getItem('ios_log')       || '[]');
+  const kesehatan = JSON.parse(localStorage.getItem('ios_kesehatan') || '[]');
+
+  const queue = [
+    ...obat.map(d      => ({ table: 'obat',      action: 'upsert', payload: d })),
+    ...pegawai.map(d   => ({ table: 'pegawai',   action: 'upsert', payload: d })),
+    ...log.map(d       => ({ table: 'log',       action: 'upsert', payload: d })),
+    ...kesehatan.map(d => ({ table: 'kesehatan', action: 'upsert', payload: d }))
+  ];
+
+  if (queue.length === 0) {
+    showToast('⚠️ Tidak ada data untuk diupload.', true);
+    return;
+  }
+
+  // Simpan antrian dan push
+  localStorage.setItem('ios_sync_queue', JSON.stringify(queue));
+  const r = await SyncManager.push();
+  if (r.ok) {
+    showToast(`✅ Berhasil! ${r.synced} data terupload ke Google Sheets!`);
+    if (currentPage === 'pengaturan') renderPengaturan();
+  } else {
+    showToast('❌ Upload gagal: ' + r.reason, true);
+  }
 }

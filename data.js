@@ -206,7 +206,7 @@ const DUMMY_PEGAWAI = [
   {
     id: 9, nama: 'Sgt. Rudi Hartono', jabatan: 'Petugas Lapas',
     spesialisasi: 'Pengawas Keamanan Klinik', hp: '0821-5678-0001',
-    email: 'rudi.h@kemenkumham.go.id',
+    email: 'rudi.h@kemenimipas.go.id',
     jadwal: 'Shift Malam (21.00–06.00)', status: 'Aktif', inisial: 'RH'
   },
   {
@@ -300,6 +300,13 @@ function initData() {
   if (!localStorage.getItem('ios_obat'))    localStorage.setItem('ios_obat',    JSON.stringify(DUMMY_OBAT));
   if (!localStorage.getItem('ios_pegawai')) localStorage.setItem('ios_pegawai', JSON.stringify(DUMMY_PEGAWAI));
   if (!localStorage.getItem('ios_log'))     localStorage.setItem('ios_log',     JSON.stringify(DUMMY_LOG));
+  if (!localStorage.getItem('ios_kesehatan')) localStorage.setItem('ios_kesehatan', JSON.stringify(DUMMY_KESEHATAN));
+  if (!localStorage.getItem('ios_gas_url')) localStorage.setItem('ios_gas_url', 'https://script.google.com/macros/s/AKfycbz_0dRpLd2Uvc3UOx0dczXmwnFZZSg4euWgG7BEiF5UQSpzxIzKFNF9kw65HgJT5rws/exec');
+  if (!localStorage.getItem('ios_accounts')) {
+    localStorage.setItem('ios_accounts', JSON.stringify([
+      { id: 1, username: 'admin', password: 'admin1234', nama: 'Admin Klinik', role: 'Super Admin', createdAt: '2026-06-01' }
+    ]));
+  }
 }
 
 // ── CRUD Helpers (Offline-First) ───────────────────────────────────

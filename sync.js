@@ -141,9 +141,25 @@ const SyncManager = (() => {
     }
   }
 
-  // ── Helper: JSONP Request (bypass CORS redirect) ──────────────
-  function _jsonp(url, timeout = 15000) {
+  // ── Helper: Abstract API Call (Natif GAS atau JSONP) ──────────────
+  function apiCall(action, payload = null) {
     return new Promise((resolve, reject) => {
+      // 1. Jalur NATIVE Google Apps Script
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        if (action === 'ping') {
+           resolve({ status: 'ok', ts: new Date().toISOString() });
+        } else if (action === 'pull') {
+           google.script.run.withSuccessHandler(res => resolve(res)).withFailureHandler(err => reject(err)).pullData();
+        } else if (action === 'push') {
+           google.script.run.withSuccessHandler(res => resolve({status:'ok', processed: payload.length})).withFailureHandler(err => reject(err)).processQueue(payload);
+        }
+        return;
+      }
+
+      // 2. Jalur JSONP (Localhost / Netlify)
+      const url = _getGasUrl();
+      if (!url) return reject(new Error('no_url'));
+
       const cbName = '_ios_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
       const script = document.createElement('script');
       let timer;
@@ -159,10 +175,13 @@ const SyncManager = (() => {
         script.remove();
         delete window[cbName];
         reject(new Error('Request timeout'));
-      }, timeout);
+      }, 15000);
 
       const sep = url.includes('?') ? '&' : '?';
-      script.src = url + sep + 'callback=' + cbName;
+      let fullUrl = url + sep + 'callback=' + cbName + '&action=' + action;
+      if (payload) fullUrl += '&payload=' + encodeURIComponent(JSON.stringify({action:'push', queue: payload}));
+
+      script.src = fullUrl;
       script.onerror = () => {
         clearTimeout(timer);
         script.remove();
@@ -175,8 +194,8 @@ const SyncManager = (() => {
 
   // ── PUSH — Unggah Antrian ke Google Sheets ─────────────────────
   async function push() {
-    const url = _getGasUrl();
-    if (!url) {
+    const isNative = (typeof google !== 'undefined' && google.script);
+    if (!_getGasUrl() && !isNative) {
       _setStatus('OFFLINE');
       return { ok: false, reason: 'no_url' };
     }
@@ -188,9 +207,7 @@ const SyncManager = (() => {
     _addLog('INFO', `Mulai push ${q.length} perubahan ke Google Sheets`);
 
     try {
-      // Encode data as URL parameter for JSONP GET (GAS POST has CORS issues)
-      const payload = encodeURIComponent(JSON.stringify({ action: 'push', queue: q }));
-      const data = await _jsonp(`${url}?action=push&payload=${payload}`);
+      const data = await apiCall('push', q);
 
       if (data.status === 'ok') {
         _saveQueue([]); // kosongkan antrian
@@ -218,8 +235,8 @@ const SyncManager = (() => {
 
   // ── PULL — Ambil Data Terbaru dari Google Sheets ───────────────
   async function pull() {
-    const url = _getGasUrl();
-    if (!url) {
+    const isNative = (typeof google !== 'undefined' && google.script);
+    if (!_getGasUrl() && !isNative) {
       _setStatus('OFFLINE');
       return { ok: false, reason: 'no_url' };
     }
@@ -228,14 +245,15 @@ const SyncManager = (() => {
     _addLog('INFO', 'Mengambil data terbaru dari Google Sheets...');
 
     try {
-      const data = await _jsonp(`${url}?action=pull`);
+      const data = await apiCall('pull');
 
       if (data.status !== 'ok') throw new Error(data.error || 'Pull gagal');
 
       // Perbarui localStorage dari data cloud jika tersedia
-      if (data.obat     && Array.isArray(data.obat))     localStorage.setItem('ios_obat',    JSON.stringify(data.obat));
-      if (data.pegawai  && Array.isArray(data.pegawai))  localStorage.setItem('ios_pegawai', JSON.stringify(data.pegawai));
-      if (data.log      && Array.isArray(data.log))      localStorage.setItem('ios_log',     JSON.stringify(data.log));
+      if (data.obat      && Array.isArray(data.obat))      localStorage.setItem('ios_obat',      JSON.stringify(data.obat));
+      if (data.pegawai   && Array.isArray(data.pegawai))   localStorage.setItem('ios_pegawai',   JSON.stringify(data.pegawai));
+      if (data.log       && Array.isArray(data.log))       localStorage.setItem('ios_log',       JSON.stringify(data.log));
+      if (data.kesehatan && Array.isArray(data.kesehatan)) localStorage.setItem('ios_kesehatan', JSON.stringify(data.kesehatan));
 
       const meta = _getMeta();
       meta.lastPull = new Date().toISOString();
@@ -254,10 +272,10 @@ const SyncManager = (() => {
 
   // ── Ping — Cek Koneksi ─────────────────────────────────────────
   async function ping() {
-    const url = _getGasUrl();
-    if (!url) { _setStatus('OFFLINE'); return false; }
+    const isNative = (typeof google !== 'undefined' && google.script);
+    if (!_getGasUrl() && !isNative) { _setStatus('OFFLINE'); return false; }
     try {
-      const data = await _jsonp(`${url}?action=ping`, 8000);
+      const data = await apiCall('ping');
       const ok   = data.status === 'ok';
       _setStatus(ok ? 'ONLINE' : 'ERROR');
       return ok;
@@ -271,7 +289,8 @@ const SyncManager = (() => {
   function startAutoSync() {
     stopAutoSync();
     _timer = setInterval(async () => {
-      if (!_getGasUrl()) return;
+      const isNative = (typeof google !== 'undefined' && google.script);
+      if (!_getGasUrl() && !isNative) return;
       const q = _getQueue();
       if (q.length > 0) await push();
       else await ping();
@@ -292,15 +311,16 @@ const SyncManager = (() => {
 
   // ── Inisialisasi ───────────────────────────────────────────────
   function init() {
+    const isNative = (typeof google !== 'undefined' && google.script);
     const url = _getGasUrl();
-    _setStatus(url ? 'OFFLINE' : 'OFFLINE'); // akan di-update setelah ping
-    if (url) {
+    _setStatus((url || isNative) ? 'OFFLINE' : 'OFFLINE'); // akan di-update setelah ping
+    if (url || isNative) {
       setTimeout(async () => {
         await ping();
         startAutoSync();
       }, 2000);
     }
-    _addLog('INFO', `SyncManager v${CONFIG.VERSION} diinisialisasi`, url ? `URL: ${url.substring(0, 40)}...` : 'Belum ada URL terdaftar');
+    _addLog('INFO', `SyncManager v${CONFIG.VERSION} diinisialisasi`, (isNative ? 'Mode NATIVE Apps Script' : (url ? \`URL: \${url.substring(0, 40)}...\` : 'Belum ada URL terdaftar')));
   }
 
   // ── Subscribe Status ───────────────────────────────────────────
@@ -325,6 +345,7 @@ const SyncManager = (() => {
 //   - Sheet bernama "Obat"
 //   - Sheet bernama "Pegawai"
 //   - Sheet bernama "Log"
+//   - Sheet bernama "Kesehatan"
 // =============================================================
 
 const SS = SpreadsheetApp.getActiveSpreadsheet();
@@ -333,6 +354,17 @@ function doGet(e) {
   const action   = e.parameter.action || '';
   const callback = e.parameter.callback || '';
   let result;
+
+  // Jika dibuka langsung tanpa parameter (sebagai halaman web publik)
+  if (!action && !callback) {
+    try {
+      return HtmlService.createHtmlOutputFromFile('Index')
+        .setTitle('IOS Klinik Pratama Palembang')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    } catch(err) {
+      return ContentService.createTextOutput("File Index.html belum dibuat di project Apps Script Anda.");
+    }
+  }
 
   if (action === 'ping') {
     result = { status: 'ok', ts: new Date().toISOString() };
@@ -383,6 +415,7 @@ function pullData() {
     obat    : sheetToJson('Obat'),
     pegawai : sheetToJson('Pegawai'),
     log     : sheetToJson('Log'),
+    kesehatan: sheetToJson('Kesehatan'),
   };
 }
 
