@@ -516,33 +516,96 @@ function _renderPage(page) {
     if (container) container.innerHTML = '<div class="empty-state"><i class="ph ph-smiley-sad"></i><p>Halaman tidak ditemukan</p></div>';
   }
 
-  // Mobile: tutup sidebar setelah navigasi
-  if (window.innerWidth <= 768) {
+  // Mobile/Tablet: tutup sidebar setelah navigasi
+  if (window.innerWidth < 1024) {
     const sb = document.getElementById('sidebar');
-    const mc = document.getElementById('main-content');
-    if (sb) sb.classList.remove('collapsed');
-    if (mc) mc.classList.remove('expanded');
+    if (sb) sb.classList.remove('sidebar-open', 'collapsed');
+    _closeSidebarBackdrop();
+    document.body.style.overflow = '';
   }
 }
 
 function toggleSidebar() {
   const s = document.getElementById('sidebar');
   const m = document.getElementById('main-content');
-  s.classList.toggle('collapsed');
-  m.classList.toggle('expanded');
+  if (!s) return;
+
+  if (window.innerWidth >= 1024) {
+    // Desktop: collapse sidebar ke icon-only
+    s.classList.toggle('collapsed');
+    if (m) m.classList.toggle('expanded');
+    // Pastikan tidak ada mobile state
+    s.classList.remove('sidebar-open');
+    _closeSidebarBackdrop();
+  } else {
+    // Mobile / Tablet: slide-in overlay sidebar
+    const isOpen = s.classList.toggle('sidebar-open');
+    _toggleSidebarBackdrop(isOpen);
+    // Pastikan tidak ada desktop state
+    s.classList.remove('collapsed');
+    if (m) m.classList.remove('expanded');
+  }
 }
 
-document.addEventListener('click', e => {
-  if (window.innerWidth <= 768) {
-    const s = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('sidebarToggle');
-    if (s && s.classList.contains('collapsed') && !s.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
-      s.classList.remove('collapsed');
-      const m = document.getElementById('main-content');
-      if (m) m.classList.remove('expanded');
-    }
+function _toggleSidebarBackdrop(show) {
+  let bd = document.getElementById('sidebar-backdrop');
+  if (!bd) {
+    bd = document.createElement('div');
+    bd.id = 'sidebar-backdrop';
+    bd.className = 'sidebar-backdrop';
+    bd.addEventListener('click', _closeSidebarByBackdrop);
+    document.body.appendChild(bd);
+  }
+  if (show) {
+    bd.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  } else {
+    bd.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+function _closeSidebarBackdrop() {
+  _toggleSidebarBackdrop(false);
+}
+
+function _closeSidebarByBackdrop() {
+  const s = document.getElementById('sidebar');
+  if (s) s.classList.remove('sidebar-open');
+  _closeSidebarBackdrop();
+}
+
+// Handle browser resize: reset sidebar state
+window.addEventListener('resize', () => {
+  const s = document.getElementById('sidebar');
+  const m = document.getElementById('main-content');
+  if (!s) return;
+  if (window.innerWidth >= 1024) {
+    // Pindah ke desktop mode: hapus mobile state
+    s.classList.remove('sidebar-open');
+    _closeSidebarBackdrop();
+  } else {
+    // Pindah ke mobile/tablet: hapus desktop state
+    s.classList.remove('collapsed');
+    if (m) m.classList.remove('expanded');
+    _closeSidebarBackdrop();
+    s.classList.remove('sidebar-open');
   }
 });
+
+document.addEventListener('click', e => {
+  // Mobile click-outside: tidak perlu karena sudah ditangani backdrop
+  // Tablet: jika sidebar-open dan klik di luar sidebar, tutup
+  const s = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  if (s && s.classList.contains('sidebar-open') &&
+      !s.contains(e.target) &&
+      (!toggleBtn || !toggleBtn.contains(e.target))) {
+    s.classList.remove('sidebar-open');
+    _closeSidebarBackdrop();
+  }
+});
+
 
 function toggleDark() {
   document.body.classList.toggle('light-mode');
