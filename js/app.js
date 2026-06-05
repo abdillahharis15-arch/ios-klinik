@@ -2401,79 +2401,132 @@ function toggleAkunPasswordVis() {
 }
 
 function simpanAkun(id) {
-  const nama = (document.getElementById('akNama').value || '').trim();
-  const username = (document.getElementById('akUsername').value || '').trim();
-  const role = (document.getElementById('akRole').value || 'Admin').trim();
-  const password = (document.getElementById('akPassword').value || '').trim();
+  console.log('[Account] simpanAkun called — id:', id, '| type:', typeof id);
 
-  if (!nama || !username) {
-    showToast('❌ Nama dan username wajib diisi!', true);
+  const nama     = (document.getElementById('akNama')?.value     || '').trim();
+  const username = (document.getElementById('akUsername')?.value || '').trim();
+  const role     = (document.getElementById('akRole')?.value     || 'Admin').trim();
+  const password = (document.getElementById('akPassword')?.value || '').trim();
+
+  // ── Validasi wajib ──
+  if (!nama)              { showToast('❌ Nama lengkap wajib diisi!', true); return; }
+  if (!username)          { showToast('❌ Username wajib diisi!', true); return; }
+  if (username.length < 3){ showToast('❌ Username minimal 3 karakter!', true); return; }
+  if (!/^[a-zA-Z0-9_.]+$/.test(username)) {
+    showToast('❌ Username hanya boleh huruf, angka, titik, dan underscore!', true);
     return;
   }
 
-  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+  try {
+    // Gunakan getData helper dari data.js → konsisten dengan seluruh sistem
+    let accounts = getData('accounts');
+    if (!Array.isArray(accounts)) accounts = [];
 
-  // Check username uniqueness (ignore self on edit)
-  const duplicate = accounts.find(a => a.username === username && a.id !== id);
-  if (duplicate) {
-    showToast('❌ Username sudah digunakan akun lain!', true);
-    return;
-  }
+    console.log('[Account] Local Account Count sebelum save:', accounts.length);
 
-  if (id === null) {
-    // New account
-    if (!password || password.length < 6) {
-      showToast('❌ Password minimal 6 karakter!', true);
+    // ── Cek username duplikat (case-insensitive, abaikan diri sendiri saat edit) ──
+    const duplicate = accounts.find(a =>
+      a.username.toLowerCase() === username.toLowerCase() &&
+      String(a.id) !== String(id)
+    );
+    if (duplicate) {
+      showToast('❌ Username sudah digunakan akun lain!', true);
       return;
     }
-    const newId = accounts.length > 0 ? Math.max(...accounts.map(a => a.id)) + 1 : 1;
-    const today = new Date().toISOString().slice(0, 10);
-    accounts.push({ id: newId, username, password, nama, role, createdAt: today });
-    localStorage.setItem('ios_accounts', JSON.stringify(accounts));
-    showToast('✅ Akun baru berhasil dibuat!');
-  } else {
-    const idx = accounts.findIndex(a => a.id === id);
-    if (idx >= 0) {
-      accounts[idx].nama = nama;
+
+    // ── FIX: gunakan == null (menangkap null DAN undefined) ──
+    const isNew = (id == null);
+    console.log('[Account] Mode:', isNew ? 'TAMBAH BARU' : 'EDIT id=' + id);
+
+    if (isNew) {
+      // ── Tambah akun baru ──
+      if (!password || password.length < 6) {
+        showToast('❌ Password minimal 6 karakter!', true);
+        return;
+      }
+      // FIX: gunakan getNextId() dari data.js untuk ID yang aman
+      const newId   = getNextId(accounts);
+      const today   = new Date().toISOString().slice(0, 10);
+      const newAcc  = { id: newId, username, password, nama, role, createdAt: today };
+
+      accounts.push(newAcc);
+      saveData('accounts', accounts); // FIX: gunakan saveData helper
+
+      console.log('[Account] Account Saved Successfully:', newAcc);
+      console.log('[Account] Local Account Count sesudah save:', accounts.length);
+      showToast('✅ Akun baru berhasil dibuat!');
+
+    } else {
+      // ── Edit akun ──
+      // FIX: gunakan String() untuk bandingkan ID (hindari '1' !== 1 bug)
+      const idx = accounts.findIndex(a => String(a.id) === String(id));
+      if (idx < 0) {
+        showToast('❌ Akun tidak ditemukan!', true);
+        console.error('[Account] Edit gagal: tidak ada akun dengan id:', id);
+        return;
+      }
+
+      accounts[idx].nama     = nama;
       accounts[idx].username = username;
-      accounts[idx].role = role;
+      accounts[idx].role     = role;
+
       if (password) {
         if (password.length < 6) {
           showToast('❌ Password minimal 6 karakter!', true);
           return;
         }
         accounts[idx].password = password;
-        // Update session if editing self
-        if (currentAdminUser && currentAdminUser.id === id) {
+        // Update sesi jika mengedit akun sendiri
+        if (currentAdminUser && String(currentAdminUser.id) === String(id)) {
           currentAdminUser = accounts[idx];
           sessionStorage.setItem('ios_admin_user', JSON.stringify(accounts[idx]));
         }
       }
-      localStorage.setItem('ios_accounts', JSON.stringify(accounts));
+
+      saveData('accounts', accounts);
+      console.log('[Account] Account Updated Successfully:', accounts[idx]);
       showToast('✅ Akun berhasil diperbarui!');
     }
-  }
 
-  closeModal();
-  // Refresh account list in settings
-  const listEl = document.getElementById('accountList');
-  if (listEl) listEl.innerHTML = renderAccountList();
-  renderSidebarFooter();
+    closeModal();
+
+    // ── Refresh daftar akun ──
+    const listEl = document.getElementById('accountList');
+    if (listEl) {
+      listEl.innerHTML = renderAccountList();
+    } else {
+      // Fallback: re-render halaman pengaturan penuh jika element tidak ditemukan
+      console.warn('[Account] accountList element tidak ditemukan — re-render pengaturan');
+      renderPengaturan();
+    }
+    renderSidebarFooter();
+
+  } catch (err) {
+    console.error('[Account] Save Error:', err);
+    showToast('❌ Gagal menyimpan akun: ' + err.message, true);
+  }
 }
 
 function hapusAkun(id) {
-  const accounts = JSON.parse(localStorage.getItem('ios_accounts') || '[]');
+  let accounts = getData('accounts');
+  if (!Array.isArray(accounts)) accounts = [];
+
   if (accounts.length <= 1) {
     showToast('❌ Minimal harus ada 1 akun admin!', true);
     return;
   }
   if (!confirm('Yakin ingin menghapus akun ini?')) return;
-  const filtered = accounts.filter(a => a.id !== id);
-  localStorage.setItem('ios_accounts', JSON.stringify(filtered));
+
+  // FIX: gunakan String() untuk perbandingan ID
+  const filtered = accounts.filter(a => String(a.id) !== String(id));
+  saveData('accounts', filtered);
+  console.log('[Account] Account deleted, remaining:', filtered.length);
   showToast('🗑️ Akun berhasil dihapus!');
+
   const listEl = document.getElementById('accountList');
   if (listEl) listEl.innerHTML = renderAccountList();
 }
+
 
 function renderSyncLog() {
   const log = SyncManager.getSyncLog();
