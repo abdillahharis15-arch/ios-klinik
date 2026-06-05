@@ -45,19 +45,25 @@
     </div>
 
     <nav class="sidebar-nav">
-      <a href="#welcome" class="nav-item active" id="nav-welcome" onclick="navigate('welcome')">
+      <!-- Nav ini diganti oleh renderSidebarNav() saat JS dimuat.
+           href & onclick di sini sebagai fallback tanpa hash. -->
+      <a href="/" class="nav-item active" id="nav-welcome"
+         onclick="event.preventDefault(); navigate('welcome')">
         <i class="ph-fill ph-house"></i>
         <span>Home</span>
       </a>
-      <a href="#obat" class="nav-item" id="nav-obat" onclick="navigate('obat')">
+      <a href="/obat" class="nav-item" id="nav-obat"
+         onclick="event.preventDefault(); navigate('obat')">
         <i class="ph-fill ph-pill"></i>
         <span>Stok Obat</span>
       </a>
-      <a href="#pegawai" class="nav-item" id="nav-pegawai" onclick="navigate('pegawai')">
+      <a href="/pegawai" class="nav-item" id="nav-pegawai"
+         onclick="event.preventDefault(); navigate('pegawai')">
         <i class="ph-fill ph-users-three"></i>
         <span>Data Pegawai</span>
       </a>
-      <a href="#kesehatan" class="nav-item" id="nav-kesehatan" onclick="navigate('kesehatan')">
+      <a href="/kesehatan" class="nav-item" id="nav-kesehatan"
+         onclick="event.preventDefault(); navigate('kesehatan')">
         <i class="ph-fill ph-heart-pulse"></i>
         <span>Info Kesehatan</span>
       </a>
