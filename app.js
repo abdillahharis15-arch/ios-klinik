@@ -1389,7 +1389,7 @@ function renderKartuPegawai(pegawai) {
 
     return `
       <div class="pegawai-card">
-        <div class="pegawai-avatar" style="background: linear-gradient(135deg, ${color}, ${color}99)">${p.inisial}</div>
+        ${p.foto ? `<img src="${p.foto}" class="pegawai-avatar" style="padding:0; object-fit:cover;">` : `<div class="pegawai-avatar" style="background: linear-gradient(135deg, ${color}, ${color}99)">${p.inisial}</div>`}
         <div class="pegawai-name">${p.nama}</div>
         <div class="pegawai-jabatan" style="color:${color}">${p.jabatan}</div>
         <div class="pegawai-detail"><i class="ph ph-stethoscope"></i> ${p.spesialisasi}</div>
@@ -1415,8 +1415,19 @@ function filterPegawai() {
 
 function showFormTambahPegawai(pegawaiData = null) {
   const isEdit = !!pegawaiData;
-  const p = pegawaiData || { nama:'', jabatan:'Dokter Umum', spesialisasi:'', hp:'', email:'', jadwal:'', status:'Aktif', inisial:'' };
+  const p = pegawaiData || { nama:'', jabatan:'Dokter Umum', spesialisasi:'', hp:'', email:'', jadwal:'', status:'Aktif', inisial:'', foto:'' };
   openModal(isEdit ? 'Edit Data Pegawai' : 'Tambah Pegawai Baru', `
+    <div style="display:flex; justify-content:center; margin-bottom:20px; flex-direction:column; align-items:center; gap:10px">
+      <input type="hidden" id="pFotoBase64" value="${p.foto || ''}">
+      <img id="pFotoPreview" src="${p.foto || ''}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:${p.foto ? 'block' : 'none'};border:2px solid var(--primary)">
+      <div id="pFotoPlaceholder" style="width:80px;height:80px;border-radius:50%;background:var(--surface);display:${p.foto ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:24px;color:var(--text-muted);border:2px dashed var(--border)">
+        <i class="ph ph-camera"></i>
+      </div>
+      <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+        <i class="ph ph-upload-simple"></i> Upload Foto
+        <input type="file" accept="image/*" style="display:none" onchange="handlePegawaiFotoUpload(event)">
+      </label>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Nama Lengkap</label>
@@ -1467,6 +1478,37 @@ function showFormTambahPegawai(pegawaiData = null) {
   `);
 }
 
+function handlePegawaiFotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX_SIZE = 150;
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+      } else {
+        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      document.getElementById('pFotoBase64').value = dataUrl;
+      document.getElementById('pFotoPreview').src = dataUrl;
+      document.getElementById('pFotoPreview').style.display = 'block';
+      document.getElementById('pFotoPlaceholder').style.display = 'none';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function simpanPegawai(editId) {
   const nama = document.getElementById('pNama').value.trim();
   const inisial = document.getElementById('pInisial').value.trim().toUpperCase();
@@ -1476,17 +1518,18 @@ function simpanPegawai(editId) {
   const email = document.getElementById('pEmail').value.trim();
   const jadwal = document.getElementById('pJadwal').value.trim();
   const status = document.getElementById('pStatus').value;
+  const foto = document.getElementById('pFotoBase64').value;
 
   if (!nama || !inisial) { showToast('Nama dan inisial wajib diisi!', true); return; }
 
   let pegawai = getData('pegawai');
   let savedPegawai;
   if (editId) {
-    pegawai = pegawai.map(p => p.id === editId ? {...p, nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status} : p);
+    pegawai = pegawai.map(p => p.id === editId ? {...p, nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status, foto} : p);
     savedPegawai = pegawai.find(p => p.id === editId);
     showToast('✅ Data pegawai berhasil diperbarui!');
   } else {
-    savedPegawai = { id: getNextId(pegawai), nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status };
+    savedPegawai = { id: getNextId(pegawai), nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status, foto };
     pegawai.push(savedPegawai);
     showToast('✅ Pegawai baru berhasil ditambahkan!');
   }
