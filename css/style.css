@@ -1628,3 +1628,6 @@ body.light-mode .welcome-hero b {
 @media (max-width: 480px) {
   .login-card { margin: 16px; padding: 28px 24px; }
 }
+
+/* CROPPER JS OVERRIDES */
+.cropper-container { max-height: 60vh; background-color: var(--bg-2); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }

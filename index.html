@@ -12,14 +12,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
 
   <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <!-- SPA Redirect Handler: pulihkan URL dari 404.html redirect trick -->
@@ -135,9 +135,35 @@
     </div>
   </div>
 
+  <!-- GLOBAL CROP MODAL -->
+  <div class="modal-overlay" id="cropModalOverlay" style="z-index: 10000; display: none;">
+    <div class="modal-box" id="cropModalBox" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3><i class="ph ph-crop"></i> Atur Posisi Foto</h3>
+        <button class="modal-close" onclick="closeCropper()"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="cropper-container">
+          <img id="cropperImage" src="" style="max-width: 100%; display: block;" />
+        </div>
+        <div style="display:flex; justify-content:center; gap:10px; margin-top:15px;">
+          <button class="btn btn-secondary btn-sm" onclick="cropperInst.zoom(0.1)"><i class="ph ph-magnifying-glass-plus"></i></button>
+          <button class="btn btn-secondary btn-sm" onclick="cropperInst.zoom(-0.1)"><i class="ph ph-magnifying-glass-minus"></i></button>
+          <button class="btn btn-secondary btn-sm" onclick="cropperInst.rotate(90)"><i class="ph ph-arrow-clockwise"></i></button>
+          <button class="btn btn-secondary btn-sm" onclick="cropperInst.reset()"><i class="ph ph-arrows-counter-clockwise"></i> Reset</button>
+        </div>
+        <div class="form-actions" style="margin-top: 20px;">
+          <button class="btn btn-secondary" onclick="closeCropper()">Batal</button>
+          <button class="btn btn-primary" onclick="saveCrop()">Simpan Potongan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <script src="js/sync.js?v=20260606"></script>
   <script src="js/data.js?v=20260606"></script>
   <script src="js/app.js?v=20260606"></script>

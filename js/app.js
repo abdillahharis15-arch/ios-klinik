@@ -1736,30 +1736,16 @@ function showFormTambahPegawai(pegawaiData = null) {
 function handlePegawaiFotoUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
+
   const reader = new FileReader();
   reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      const canvas = document.createElement('canvas');
-      const MAX_SIZE = 150;
-      let width = img.width;
-      let height = img.height;
-      if (width > height) {
-        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-      } else {
-        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      document.getElementById('pFotoBase64').value = dataUrl;
-      document.getElementById('pFotoPreview').src = dataUrl;
+    // Open cropper with 1:1 aspect ratio
+    openCropper(e.target.result, 1, function(croppedBase64) {
+      document.getElementById('pFotoBase64').value = croppedBase64;
+      document.getElementById('pFotoPreview').src = croppedBase64;
       document.getElementById('pFotoPreview').style.display = 'block';
       document.getElementById('pFotoPlaceholder').style.display = 'none';
-    };
-    img.src = e.target.result;
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -2071,44 +2057,19 @@ window.prosesUploadGambarArtikel = function(input) {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      const canvas = document.createElement('canvas');
-      const MAX_WIDTH = 600;
-      const MAX_HEIGHT = 450;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > MAX_WIDTH) {
-          height *= MAX_WIDTH / width;
-          width = MAX_WIDTH;
-        }
-      } else {
-        if (height > MAX_HEIGHT) {
-          width *= MAX_HEIGHT / height;
-          height = MAX_HEIGHT;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+    // Open cropper with 16:9 aspect ratio
+    openCropper(e.target.result, 16/9, function(croppedBase64) {
+      document.getElementById('artBase64Data').value = croppedBase64;
       
       const preview = document.getElementById('artImagePreview');
       if (preview) {
-        preview.src = base64;
+        preview.src = croppedBase64;
         preview.style.display = 'block';
         
         const fallbackPrev = document.getElementById('artFallbackPreview');
         if (fallbackPrev) fallbackPrev.style.display = 'none';
       }
-      document.getElementById('artBase64Data').value = base64;
-    };
-    img.src = e.target.result;
+    });
   };
   reader.readAsDataURL(file);
 };
@@ -2744,5 +2705,68 @@ async function pushSemuaData() {
     if (currentPage === 'pengaturan') renderPengaturan();
   } else {
     showToast('❌ Upload gagal: ' + r.reason, true);
+  }
+}
+
+// ============================================================
+// IMAGE CROPPER MODULE
+// ============================================================
+let cropperInst = null;
+let cropperCallback = null;
+
+function openCropper(imageSrc, aspectRatio, onSave) {
+  const overlay = document.getElementById('cropModalOverlay');
+  const imgEl = document.getElementById('cropperImage');
+  
+  if (!overlay || !imgEl) {
+    console.error('Cropper elements not found in DOM');
+    return;
+  }
+
+  cropperCallback = onSave;
+  imgEl.src = imageSrc;
+  overlay.style.display = 'flex';
+
+  if (cropperInst) {
+    cropperInst.destroy();
+  }
+
+  cropperInst = new Cropper(imgEl, {
+    aspectRatio: aspectRatio,
+    viewMode: 1,
+    dragMode: 'move',
+    autoCropArea: 1,
+    restore: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    toggleDragModeOnDblclick: false,
+  });
+}
+
+function closeCropper() {
+  const overlay = document.getElementById('cropModalOverlay');
+  if (overlay) overlay.style.display = 'none';
+  if (cropperInst) {
+    cropperInst.destroy();
+    cropperInst = null;
+  }
+}
+
+window.saveCrop = function() {
+  if (!cropperInst) return;
+  const canvas = cropperInst.getCroppedCanvas({
+    width: 800, // Ukuran maksimal agar kualitas tetap bagus tapi size tidak membengkak
+    imageSmoothingEnabled: true,
+    imageSmoothingQuality: 'high',
+  });
+  
+  if (canvas) {
+    // Gunakan kualitas 0.85 untuk kompresi JPEG yang optimal
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    if (cropperCallback) cropperCallback(dataUrl);
+    closeCropper();
   }
 }
