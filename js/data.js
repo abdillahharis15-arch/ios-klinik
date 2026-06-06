@@ -307,6 +307,11 @@ function initData() {
       { id: 1, username: 'admin', password: 'admin1234', nama: 'Admin Klinik', role: 'Super Admin', createdAt: '2026-06-01' }
     ]));
   }
+  if (!localStorage.getItem('ios_profil')) {
+    localStorage.setItem('ios_profil', JSON.stringify([
+      { id: 1, nama: 'Klinik Pratama Lapas Kelas I Palembang', telepon: '(0711) 123-4567', alamat: 'Jl. Merdeka No. 123, Palembang, Sumatera Selatan', upt: 'Lapas Kelas I Palembang — Ditjenpas Kemenimipas' }
+    ]));
+  }
 }
 
 // ── CRUD Helpers (Offline-First) ───────────────────────────────────

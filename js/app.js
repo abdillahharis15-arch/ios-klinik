@@ -38,6 +38,12 @@ function _getUrlForPage(page, role) {
   return `${prefix}/${page}`;
 }
 
+function getProfil() {
+  const p = getData('profil');
+  if (p.length) return p[0];
+  return { nama: 'Klinik Pratama Lapas Kelas I Palembang', telepon: '(0711) 123-4567', alamat: 'Jl. Merdeka No. 123, Palembang, Sumatera Selatan', upt: 'Lapas Kelas I Palembang — Ditjenpas Kemenimipas' };
+}
+
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', () => {
   // ① Pulihkan URL jika kita datang dari 404.html redirect trick
@@ -76,6 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
   SyncManager.init();
   updateClock();
   setInterval(updateClock, 1000);
+
+  // Update document title dynamically
+  document.title = `IOS - Informasi Obat & Kesehatan | ${getProfil().nama}`;
 
   // Render sidebar SETELAH role dipastikan benar
   renderSidebarNav();
@@ -384,7 +393,7 @@ function showLoginPage() {
       <!-- Footer -->
       <div class="login-card-footer">
         <i class="ph-fill ph-shield-check"></i>
-        Klinik Pratama Lapas Kelas I Palembang &middot; Kemenimipas
+        ${getProfil().nama} &middot; Kemenimipas
       </div>
     </div>
   `;
@@ -823,7 +832,7 @@ function renderWelcome() {
           <span style="background:rgba(255,255,255,0.2); padding:6px 12px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; border:1px solid rgba(255,255,255,0.3)">Inovasi Digital Klinik</span>
           <h1 style="font-size:36px; font-weight:800; margin:16px 0 8px 0; font-family:'Poppins', sans-serif">Selamat Datang di IOS</h1>
           <p style="font-size:15px; opacity:0.95; max-width:650px; line-height:1.6; font-weight:400">
-            Sistem Informasi Obat dan Kesehatan — persembahan inovasi digital dari <b>peserta MagangHub Divisi Klinik</b> untuk optimalisasi pelayanan medis di Klinik Pratama Lapas Kelas I Palembang / Lapas & Rutan.
+            Sistem Informasi Obat dan Kesehatan — persembahan inovasi digital dari <b>peserta MagangHub Divisi Klinik</b> untuk optimalisasi pelayanan medis di ${getProfil().nama}.
           </p>
           <button class="btn btn-primary" onclick="navigate('${currentRole === 'admin' ? 'dashboard' : 'obat'}')" style="margin-top:24px; padding:12px 28px; background:white; color:#0f172a; font-weight:700; border-radius:var(--radius-sm); border:none; box-shadow:0 10px 20px rgba(0,0,0,0.15)">
             Mulai Jelajahi <i class="ph ph-arrow-right" style="margin-left:6px;font-weight:700"></i>
@@ -906,10 +915,9 @@ function renderWelcome() {
         </div>
       </div>
 
-      <!-- FOOTER KREDIT -->
-      <div style="text-align:center; color:var(--text-dim); font-size:11px; margin-top:10px">
-        © 2026 IOS App · MagangHub Divisi Klinik Pratama Lapas Kelas I Palembang · Kemenimipas
-      </div>
+      <footer style="margin-top:40px; border-top:1px solid var(--border); padding-top:20px; text-align:center; color:var(--text-muted); font-size:12px">
+        &copy; ${new Date().getFullYear()} IOS App — MagangHub Divisi ${getProfil().nama}
+      </footer>
 
     </div>
   `;
@@ -1120,7 +1128,7 @@ function renderDashboard() {
     <div class="page-header">
       <div>
         <h1>👋 ${isHtmlAdmin ? 'Selamat Datang, Admin!' : 'Selamat Datang di IOS!'}</h1>
-        <p>${isHtmlAdmin ? 'Ringkasan aktivitas Klinik Pratama Lapas Kelas I Palembang hari ini' : 'Sistem Informasi Digital Obat & Kesehatan Klinik Pratama Lapas Kelas I Palembang'}</p>
+        <p>${isHtmlAdmin ? 'Ringkasan aktivitas ' + getProfil().nama + ' hari ini' : 'Sistem Informasi Digital Obat & Kesehatan ' + getProfil().nama}</p>
       </div>
     </div>
 
@@ -2229,6 +2237,10 @@ function renderPengaturan() {
   const statusColor = { ONLINE:'var(--secondary)', OFFLINE:'var(--text-muted)', SYNCING:'var(--primary)', ERROR:'var(--danger)' };
   const statusLabel = { ONLINE:'Tersinkronisasi ✅', OFFLINE:'Mode Lokal (Offline)', SYNCING:'Sedang Sinkronisasi...', ERROR:'Koneksi Gagal ❌' };
 
+  let profilArr = getData('profil');
+  if (!profilArr.length) profilArr = [{ id: 1, nama: 'Klinik Pratama Lapas Kelas I Palembang', telepon: '(0711) 123-4567', alamat: 'Jl. Merdeka No. 123, Palembang, Sumatera Selatan', upt: 'Lapas Kelas I Palembang — Ditjenpas Kemenimipas' }];
+  const prof = profilArr[0];
+
   document.getElementById('page-container').innerHTML = `
     <div class="page-header">
       <div>
@@ -2243,24 +2255,24 @@ function renderPengaturan() {
       <div class="form-row">
         <div class="form-group">
           <label>Nama Fasilitas Kesehatan</label>
-          <input class="form-control" id="kNama" value="Klinik Pratama Lapas Kelas I Palembang" />
+          <input class="form-control" id="kNama" value="${prof.nama}" />
         </div>
         <div class="form-group">
           <label>No. Telepon</label>
-          <input class="form-control" id="kTelp" value="(0711) 123-4567" />
+          <input class="form-control" id="kTelp" value="${prof.telepon}" />
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Alamat Lengkap</label>
-          <input class="form-control" id="kAlamat" value="Jl. Merdeka No. 123, Palembang, Sumatera Selatan" />
+          <input class="form-control" id="kAlamat" value="${prof.alamat}" />
         </div>
         <div class="form-group">
           <label>Unit Pelaksana Teknis (UPT)</label>
-          <input class="form-control" id="kUPT" value="Lapas Kelas I Palembang — Ditjenpas Kemenimipas" />
+          <input class="form-control" id="kUPT" value="${prof.upt}" />
         </div>
       </div>
-      <button class="btn btn-primary" onclick="showToast('✅ Profil klinik berhasil disimpan!')"><i class="ph ph-floppy-disk"></i> Simpan Profil</button>
+      <button class="btn btn-primary" onclick="simpanProfilKlinik()"><i class="ph ph-floppy-disk"></i> Simpan Profil</button>
     </div>
 
     <!-- INTEGRASI GOOGLE SHEETS -->
@@ -2708,6 +2720,35 @@ async function pushSemuaData() {
   } else {
     showToast('❌ Upload gagal: ' + r.reason, true);
   }
+}
+
+// ============================================================
+// PROFIL KLINIK HANDLER
+// ============================================================
+window.simpanProfilKlinik = function() {
+  const nama = document.getElementById('kNama').value.trim();
+  const telepon = document.getElementById('kTelp').value.trim();
+  const alamat = document.getElementById('kAlamat').value.trim();
+  const upt = document.getElementById('kUPT').value.trim();
+
+  if (!nama || !telepon || !alamat || !upt) {
+    showToast('❌ Mohon lengkapi seluruh kolom profil klinik!', true);
+    return;
+  }
+
+  const newProfile = { id: 1, nama, telepon, alamat, upt };
+  saveData('profil', [newProfile]);
+  
+  // Sinkronisasi ke Google Sheets
+  SyncManager.enqueue('profil', 'upsert', newProfile);
+  _bgPush();
+  
+  showToast('✅ Profil klinik berhasil disimpan secara permanen!');
+  
+  // Update UI secara live jika dibutuhkan tanpa harus refresh
+  setTimeout(() => {
+    location.reload(); // Paksa refresh untuk mengupdate string publik
+  }, 1000);
 }
 
 // ============================================================

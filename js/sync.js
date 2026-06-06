@@ -333,6 +333,7 @@ const SyncManager = (() => {
       mergeTable('pegawai',   remote.pegawai);
       mergeTable('log',       remote.log);
       mergeTable('kesehatan', remote.kesehatan);
+      mergeTable('profil',    remote.profil);
 
       const meta = _getMeta();
       meta.lastPull = new Date().toISOString();
