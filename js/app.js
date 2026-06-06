@@ -137,8 +137,80 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, 2000); // delay 2 detik untuk pastikan app siap
   }
+
+  // ──────────────────────────────────────────────────────────────────
+  // FIX #1: AUTO-PULL PUBLIK — Publik mendapatkan data terbaru dari Sheets
+  // ──────────────────────────────────────────────────────────────────
+  if (currentRole === 'publik' && localStorage.getItem('ios_gas_url')) {
+    // Pull pertama kali saat halaman dimuat (3 detik setelah ready)
+    setTimeout(async () => {
+      console.log('[PublicSync] AUTO-PULL START: mengambil data terbaru dari Sheets...');
+      try {
+        const r = await SyncManager.pull();
+        if (r.ok) {
+          console.log('[PublicSync] AUTO-PULL SUCCESS: data publik diperbarui dari Sheets.');
+          navigate(currentPage, { skipPush: true });
+        } else {
+          console.warn('[PublicSync] AUTO-PULL FAILED:', r.reason, '— menggunakan data lokal.');
+        }
+      } catch (e) {
+        console.warn('[PublicSync] AUTO-PULL ERROR:', e.message);
+      }
+    }, 3000);
+
+    // Pull otomatis setiap 5 menit — pastikan publik selalu punya data terkini
+    setInterval(async () => {
+      if (currentRole !== 'publik') return; // stop jika sudah login admin
+      console.log('[PublicSync] INTERVAL PULL: refresh data publik...');
+      try {
+        const r = await SyncManager.pull();
+        if (r.ok) navigate(currentPage, { skipPush: true });
+      } catch (e) { /* silent */ }
+    }, 5 * 60 * 1000); // setiap 5 menit
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // FIX #2: CROSS-TAB SYNC — Admin update di Tab A → Tab B (publik) refresh otomatis
+  // localStorage 'storage' event terpicu di tab LAIN saat ada perubahan.
+  // ──────────────────────────────────────────────────────────────────
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'ios_last_update') return;
+    console.log('[CrossTab] Perubahan data terdeteksi dari tab lain — refresh halaman...');
+    // Re-render halaman saat ini dengan data terbaru dari localStorage
+    navigate(currentPage, { skipPush: true });
+    renderNotif();
+  });
 });
 
+// =======================================================================
+// FIX #3: BACKGROUND PUSH — push otomatis ke Sheets setelah setiap CRUD
+// =======================================================================
+/**
+ * Fire-and-forget push ke Google Sheets setelah admin menyimpan data.
+ * Juga set 'ios_last_update' di localStorage untuk trigger cross-tab sync
+ * (tab publik yang terbuka di browser yang sama akan auto-refresh).
+ */
+function _bgPush() {
+  if (currentRole !== 'admin') return;
+  if (!localStorage.getItem('ios_gas_url')) return;
+
+  // Set last_update — ini yang men-trigger 'storage' event di tab lain
+  const now = Date.now().toString();
+  localStorage.setItem('ios_last_update', now);
+  console.log('[BgPush] Push To Sheets Started — timestamp:', now);
+
+  SyncManager.push()
+    .then(r => {
+      if (r.ok) {
+        console.log('[BgPush] Push To Sheets Success —', r.synced, 'item tersinkronisasi.');
+      } else {
+        console.warn('[BgPush] Push To Sheets gagal (data tetap di antrian):', r.reason);
+      }
+    })
+    .catch(err => {
+      console.warn('[BgPush] Push error (data tetap di antrian):', err.message);
+    });
+}
 
 /// Klik tombol sync — jika ada antrian push, jika tidak pull
 async function handleSyncClick() {
