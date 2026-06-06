@@ -1511,6 +1511,7 @@ function simpanObat(editId) {
   }
   saveData('obat', obat);
   SyncManager.enqueue('obat', 'upsert', savedObat);
+  _bgPush();
   closeModal();
   renderObat();
 }
@@ -1525,6 +1526,7 @@ function hapusObat(id) {
   let obat = getData('obat').filter(o => o.id !== id);
   saveData('obat', obat);
   SyncManager.enqueue('obat', 'delete', { id });
+  _bgPush();
   showToast('🗑️ Data obat berhasil dihapus!');
   renderObat();
 }
@@ -1566,6 +1568,7 @@ function simpanTransaksi() {
   log.push(newLog);
   saveData('log', log);
   SyncManager.enqueue('log', 'upsert', newLog);
+  _bgPush();
   showToast(`✅ Transaksi ${jenis} berhasil dicatat!`);
   renderObat();
 }
@@ -1787,6 +1790,7 @@ function simpanPegawai(editId) {
   }
   saveData('pegawai', pegawai);
   SyncManager.enqueue('pegawai', 'upsert', savedPegawai);
+  _bgPush();
   closeModal();
   renderPegawai();
 }
@@ -1800,6 +1804,7 @@ function hapusPegawai(id) {
   if (!confirm('Yakin ingin menghapus data pegawai ini?')) return;
   saveData('pegawai', getData('pegawai').filter(p => p.id !== id));
   SyncManager.enqueue('pegawai', 'delete', { id });
+  _bgPush();
   showToast('🗑️ Data pegawai berhasil dihapus!');
   renderPegawai();
 }
@@ -2023,6 +2028,7 @@ function simpanArtikel(id) {
     kesehatan.push(newArticle);
     saveData('kesehatan', kesehatan);
     SyncManager.enqueue('kesehatan', 'upsert', newArticle);
+    _bgPush();
     showToast('✅ Artikel baru berhasil ditambahkan!');
   } else {
     const idx = kesehatan.findIndex(x => x.id === id);
@@ -2035,6 +2041,7 @@ function simpanArtikel(id) {
       kesehatan[idx].image = image || undefined;
       saveData('kesehatan', kesehatan);
       SyncManager.enqueue('kesehatan', 'upsert', kesehatan[idx]);
+      _bgPush();
       showToast('✅ Artikel berhasil diperbarui!');
     }
   }
@@ -2052,6 +2059,7 @@ function hapusArtikel(id) {
     const removed = kesehatan.splice(idx, 1)[0];
     saveData('kesehatan', kesehatan);
     SyncManager.enqueue('kesehatan', 'delete', { id });
+    _bgPush();
     showToast('🗑️ Artikel berhasil dihapus!');
     renderKesehatan();
   }
