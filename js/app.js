@@ -1739,8 +1739,9 @@ function handlePegawaiFotoUpload(event) {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    // Open cropper with 1:1 aspect ratio
-    openCropper(e.target.result, 1, function(croppedBase64) {
+    // Open cropper with 1:1 aspect ratio, max width 150px, quality 0.7
+    // Ukuran kecil ini wajib agar base64 tidak melebihi limit 50,000 karakter Google Sheets
+    openCropper(e.target.result, 1, 150, 0.7, function(croppedBase64) {
       document.getElementById('pFotoBase64').value = croppedBase64;
       document.getElementById('pFotoPreview').src = croppedBase64;
       document.getElementById('pFotoPreview').style.display = 'block';
@@ -2057,8 +2058,9 @@ window.prosesUploadGambarArtikel = function(input) {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    // Open cropper with 16:9 aspect ratio
-    openCropper(e.target.result, 16/9, function(croppedBase64) {
+    // Open cropper with 16:9 aspect ratio, max width 400px, quality 0.7
+    // Ukuran dibatasi agar tidak melebihi limit JSONP URL dan Google Sheets cell
+    openCropper(e.target.result, 16/9, 400, 0.7, function(croppedBase64) {
       document.getElementById('artBase64Data').value = croppedBase64;
       
       const preview = document.getElementById('artImagePreview');
@@ -2713,8 +2715,10 @@ async function pushSemuaData() {
 // ============================================================
 let cropperInst = null;
 let cropperCallback = null;
+let cropperOutputWidth = 800;
+let cropperOutputQuality = 0.85;
 
-function openCropper(imageSrc, aspectRatio, onSave) {
+function openCropper(imageSrc, aspectRatio, outputWidth, outputQuality, onSave) {
   const overlay = document.getElementById('cropModalOverlay');
   const imgEl = document.getElementById('cropperImage');
   
@@ -2724,6 +2728,8 @@ function openCropper(imageSrc, aspectRatio, onSave) {
   }
 
   cropperCallback = onSave;
+  cropperOutputWidth = outputWidth || 800;
+  cropperOutputQuality = outputQuality || 0.85;
   imgEl.src = imageSrc;
   overlay.style.display = 'flex';
 
@@ -2758,14 +2764,14 @@ function closeCropper() {
 window.saveCrop = function() {
   if (!cropperInst) return;
   const canvas = cropperInst.getCroppedCanvas({
-    width: 800, // Ukuran maksimal agar kualitas tetap bagus tapi size tidak membengkak
+    width: cropperOutputWidth, // Ukuran maksimal agar muat di Google Sheets cell limit (<50k chars)
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high',
   });
   
   if (canvas) {
-    // Gunakan kualitas 0.85 untuk kompresi JPEG yang optimal
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // Gunakan kualitas kompresi JPEG dinamis (0.7 - 0.85) untuk optimasi ukuran
+    const dataUrl = canvas.toDataURL('image/jpeg', cropperOutputQuality);
     if (cropperCallback) cropperCallback(dataUrl);
     closeCropper();
   }
