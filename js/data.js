@@ -316,7 +316,13 @@ function initData() {
 
 // ── CRUD Helpers (Offline-First) ───────────────────────────────────
 function getData(key) {
-  try { return JSON.parse(localStorage.getItem('ios_' + key) || '[]'); }
+  try {
+    const data = JSON.parse(localStorage.getItem('ios_' + key) || '[]');
+    if (key === 'log') {
+      console.log('[DEBUG] Transaction Loaded — Count:', data.length);
+    }
+    return data;
+  }
   catch { return []; }
 }
 

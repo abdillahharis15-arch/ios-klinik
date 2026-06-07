@@ -229,6 +229,10 @@ const SyncManager = (() => {
         _saveMeta(meta);
         _setStatus('ONLINE');
         console.log(`[IOS Sync] PUSH SUCCESS: ${q.length} item berhasil diunggah ke Sheets.`, data);
+        if (q.some(e => e.table === 'log')) {
+          console.log('[DEBUG] Transaction Saved To Sheets');
+        }
+        console.log('[DEBUG] Transaction Sync Success');
         _addLog('SUCCESS', `Push berhasil — ${q.length} item tersinkronisasi`, JSON.stringify(data));
         return { ok: true, synced: q.length };
       } else {
@@ -342,6 +346,7 @@ const SyncManager = (() => {
 
       _setStatus('ONLINE');
       console.log('[IOS Sync] PULL SUCCESS: data berhasil di-merge dari Google Sheets.');
+      console.log('[DEBUG] Transaction Sync Success');
       _addLog('SUCCESS', 'Pull & merge berhasil — data lokal diperbarui dengan aman dari Google Sheets');
       return { ok: true, data: remote };
     } catch (err) {
@@ -530,7 +535,7 @@ function processQueue(queue) {
 }
 
 function upsertRow(sh, data) {
-  const lastCol = sh.getLastColumn();
+  let lastCol = sh.getLastColumn();
   const lastRow = sh.getLastRow();
 
   // Sheet benar-benar kosong (belum ada baris satupun)
@@ -543,7 +548,21 @@ function upsertRow(sh, data) {
   }
 
   // Baca header dari baris 1
-  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  let headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  // Cari apakah ada key baru di data yang belum ada di header
+  let headerChanged = false;
+  Object.keys(data).forEach(function(key) {
+    if (headers.indexOf(key) < 0) {
+      headers.push(key);
+      headerChanged = true;
+    }
+  });
+
+  if (headerChanged) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    lastCol = headers.length;
+  }
 
   // Cek apakah kolom id ada di header
   const idCol = headers.indexOf('id');

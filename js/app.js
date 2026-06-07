@@ -1110,14 +1110,21 @@ function renderDashboard() {
             </tr>
           </thead>
           <tbody>
-            ${getData('log').slice(-5).reverse().map(l => `
+            ${getData('log').slice(-5).reverse().map(l => {
+              const oName = l.Nama_Obat || l.obat || '-';
+              const jenisVal = l.Jenis_Transaksi || l.jenis;
+              const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
+              const ket = l.Keterangan || l.keterangan || '-';
+              const time = l.Timestamp || l.timestamp || '-';
+              return `
               <tr>
-                <td><b>${l.obat}</b></td>
-                <td><span class="badge ${l.jenis === 'masuk' ? 'badge-success' : 'badge-warning'}">${l.jenis === 'masuk' ? '↓ Masuk' : '↑ Keluar'}</span></td>
-                <td>${l.jumlah}</td>
-                <td>${l.keterangan}</td>
-                <td style="color:var(--text-muted);font-size:13px">${l.timestamp}</td>
-              </tr>`).join('')}
+                <td><b>${oName}</b></td>
+                <td><span class="badge ${jenisVal === 'masuk' ? 'badge-success' : 'badge-warning'}">${jenisVal === 'masuk' ? '↓ Masuk' : '↑ Keluar'}</span></td>
+                <td>${jlh}</td>
+                <td>${ket}</td>
+                <td style="color:var(--text-muted);font-size:13px">${time}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>
@@ -1205,8 +1212,40 @@ function renderDashboardCharts(obat) {
 // ============================================================
 // OBAT PAGE
 // ============================================================
+// ============================================================
+// OBAT PAGE
+// ============================================================
+function generateTxNumber() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `TX-${year}${month}${date}-${hh}${mm}${ss}-${rand}`;
+}
+
+window.toggleTxFields = function() {
+  const jenis = document.getElementById('txJenis')?.value;
+  const patientRow = document.getElementById('txPatientRow');
+  if (!patientRow) return;
+  
+  if (jenis === 'masuk') {
+    patientRow.style.display = 'none';
+    document.getElementById('txPasien').value = '';
+    document.getElementById('txPenyakit').value = '';
+    document.getElementById('txSel').value = '';
+    document.getElementById('txPeresep').value = '-';
+  } else {
+    patientRow.style.display = 'flex';
+  }
+};
+
 function renderObat() {
   const obat = getData('obat');
+  const pegawai = getData('pegawai');
   const kategoriSet = [...new Set(obat.map(o => o.kategori))];
 
   const isHtmlAdmin = currentRole === 'admin';
@@ -1214,11 +1253,43 @@ function renderObat() {
   const headerTitle = isHtmlAdmin ? 'Manajemen Stok Obat' : 'Informasi Stok Obat';
   const headerDesc = isHtmlAdmin ? 'Kelola data stok obat harian — tambah, edit, dan catat transaksi masuk/keluar' : 'Cari dan pantau ketersediaan stok obat secara real-time';
 
+  const nextTxNumber = generateTxNumber();
+  const today = new Date().toISOString().split('T')[0];
+
   const transactionForm = isHtmlAdmin ? `
     <div class="card" style="margin-top:20px">
       <div class="card-header">
         <div class="card-title"><i class="ph-fill ph-arrows-down-up"></i> Catat Transaksi Obat</div>
       </div>
+      
+      <!-- Baris 1: Nomor, Tanggal, Jenis, Status -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nomor Transaksi</label>
+          <input type="text" class="form-control" id="txNomor" value="${nextTxNumber}" readonly style="opacity:0.8; background:rgba(255,255,255,0.03)" />
+        </div>
+        <div class="form-group">
+          <label>Tanggal Transaksi</label>
+          <input type="date" class="form-control" id="txTanggal" value="${today}" />
+        </div>
+        <div class="form-group">
+          <label>Jenis Transaksi</label>
+          <select class="form-control" id="txJenis" onchange="toggleTxFields()">
+            <option value="keluar" selected>Obat Keluar (Distribusi)</option>
+            <option value="masuk">Obat Masuk (Pengadaan)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status Transaksi</label>
+          <select class="form-control" id="txStatus">
+            <option value="Selesai" selected>Selesai</option>
+            <option value="Pending">Pending</option>
+            <option value="Dibatalkan">Dibatalkan</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Baris 2: Nama Obat, Jumlah, Petugas Penyerah -->
       <div class="form-row">
         <div class="form-group">
           <label>Nama Obat</label>
@@ -1227,21 +1298,59 @@ function renderObat() {
           </select>
         </div>
         <div class="form-group">
-          <label>Jenis Transaksi</label>
-          <select class="form-control" id="txJenis">
-            <option value="masuk">Obat Masuk (Pengadaan)</option>
-            <option value="keluar">Obat Keluar (Distribusi)</option>
-          </select>
-        </div>
-        <div class="form-group">
           <label>Jumlah</label>
           <input type="number" class="form-control" id="txJumlah" placeholder="Masukkan jumlah" min="1" />
         </div>
         <div class="form-group">
-          <label>Keterangan</label>
+          <label>Petugas Penyerah Obat</label>
+          <select class="form-control" id="txPenyerah">
+            ${pegawai.filter(p => ['Apoteker', 'Perawat', 'Admin'].includes(p.jabatan)).map(p => `<option value="${p.nama}">${p.nama} (${p.jabatan})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Baris 3: Data Pasien & Petugas Peresep (Hanya jika Obat Keluar) -->
+      <div class="form-row" id="txPatientRow">
+        <div class="form-group">
+          <label>Nama Pasien</label>
+          <input type="text" class="form-control" id="txPasien" placeholder="Nama pasien WBP" />
+        </div>
+        <div class="form-group">
+          <label>Diagnosa / Penyakit</label>
+          <input type="text" class="form-control" id="txPenyakit" placeholder="Diagnosa medis..." />
+        </div>
+        <div class="form-group" style="max-width:180px">
+          <label>Blok Hunian</label>
+          <select class="form-control" id="txBlok">
+            <option value="Blok A">Blok A (Tipikor)</option>
+            <option value="Blok B">Blok B (Narkotika)</option>
+            <option value="Blok C">Blok C (Umum)</option>
+            <option value="Blok D">Blok D (Maksimum)</option>
+            <option value="Isolasi">Sel Isolasi</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Nomor Sel</label>
+          <input type="text" class="form-control" id="txSel" placeholder="Sel" />
+        </div>
+        <div class="form-group">
+          <label>Petugas Peresep Obat</label>
+          <select class="form-control" id="txPeresep">
+            <option value="-">- Tidak Ada -</option>
+            ${pegawai.filter(p => ['Dokter Umum', 'Dokter Spesialis'].includes(p.jabatan)).map(p => `<option value="${p.nama}">${p.nama} (${p.jabatan})</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Baris 4: Keterangan -->
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label>Keterangan Tambahan</label>
           <input type="text" class="form-control" id="txKet" placeholder="Keterangan transaksi..." />
         </div>
       </div>
+      
       <button class="btn btn-primary" onclick="simpanTransaksi()"><i class="ph ph-paper-plane-right"></i> Simpan Transaksi</button>
     </div>
   ` : '';
@@ -1284,6 +1393,10 @@ function renderObat() {
 
     ${transactionForm}
   `;
+
+  if (isHtmlAdmin) {
+    toggleTxFields();
+  }
 }
 
 function renderTabelObat(obat) {
@@ -1540,10 +1653,35 @@ function hapusObat(id) {
 }
 
 function simpanTransaksi() {
+  console.log('[DEBUG] Transaction Save Started');
+
   const obatId = parseInt(document.getElementById('txObat').value);
   const jenis = document.getElementById('txJenis').value;
   const jumlah = parseInt(document.getElementById('txJumlah').value) || 0;
+  const status = document.getElementById('txStatus').value;
+  const tanggal = document.getElementById('txTanggal').value;
+  const nomorTx = document.getElementById('txNomor').value;
+  const penyerah = document.getElementById('txPenyerah').value;
   const ket = document.getElementById('txKet').value || '-';
+
+  let pasien = '-';
+  let penyakit = '-';
+  let blok = '-';
+  let sel = '-';
+  let peresep = '-';
+
+  if (jenis === 'keluar') {
+    pasien = document.getElementById('txPasien').value.trim() || '-';
+    penyakit = document.getElementById('txPenyakit').value.trim() || '-';
+    blok = document.getElementById('txBlok').value;
+    sel = document.getElementById('txSel').value.trim() || '-';
+    peresep = document.getElementById('txPeresep').value;
+    
+    if (pasien === '-' || pasien === '') {
+      showToast('Nama Pasien wajib diisi untuk pengeluaran obat!', true);
+      return;
+    }
+  }
 
   if (!jumlah || jumlah <= 0) { showToast('Jumlah transaksi harus lebih dari 0!', true); return; }
 
@@ -1555,7 +1693,6 @@ function simpanTransaksi() {
     showToast('Stok tidak mencukupi!', true); return;
   }
 
-  // Peringatan pengeluaran obat terkontrol
   if (jenis === 'keluar' && obat[idx].controlled) {
     showToast('⚠️ Obat terkontrol dikeluarkan — pastikan resep & TTD Kepala Klinik tersedia!', false);
   }
@@ -1567,14 +1704,39 @@ function simpanTransaksi() {
 
   let log = getData('log');
   const now = new Date();
+  
+  const formattedTimestamp = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0') + ' ' +
+    String(now.getHours()).padStart(2, '0') + ':' +
+    String(now.getMinutes()).padStart(2, '0') + ':' +
+    String(now.getSeconds()).padStart(2, '0');
+
   const newLog = {
     id: getNextId(log),
+    ID_Transaksi: nomorTx,
+    Tanggal: tanggal,
+    Nama_Pasien: pasien,
+    Penyakit: penyakit,
+    Blok: blok,
+    Sel: sel,
+    Nama_Obat: obat[idx].nama,
+    Jenis_Transaksi: jenis,
+    Jumlah: jumlah,
+    Petugas_Peresep: peresep,
+    Petugas_Penyerah: penyerah,
+    Keterangan: obat[idx].controlled ? `⚠ TERKONTROL — ${ket}` : ket,
+    Timestamp: formattedTimestamp,
+    status: status,
     obat: obat[idx].nama, jenis, jumlah,
-    keterangan: obat[idx].controlled ? `⚠ TERKONTROL — ${ket}` : ket,
-    timestamp: now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})
+    timestamp: now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+    keterangan: obat[idx].controlled ? `⚠ TERKONTROL — ${ket}` : ket
   };
+
   log.push(newLog);
   saveData('log', log);
+  console.log('[DEBUG] Transaction Save Success — ID:', newLog.id);
+
   SyncManager.enqueue('log', 'upsert', newLog);
   _bgPush();
   showToast(`✅ Transaksi ${jenis} berhasil dicatat!`);
@@ -2100,9 +2262,134 @@ window.hapusGambarArtikelUploaded = function() {
 // ============================================================
 // LAPORAN PAGE
 // ============================================================
+window.renderTabelRiwayat = function(logData) {
+  if (!logData.length) {
+    return '<div class="empty-state"><i class="ph ph-clock"></i><p>Tidak ada riwayat transaksi yang cocok</p></div>';
+  }
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>No. Transaksi</th>
+          <th>Tanggal</th>
+          <th>Nama Obat</th>
+          <th>Jenis</th>
+          <th>Jumlah</th>
+          <th>Pasien</th>
+          <th>Diagnosa</th>
+          <th>Blok/Sel</th>
+          <th>Peresep</th>
+          <th>Penyerah</th>
+          <th>Keterangan</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${[...logData].reverse().map(l => {
+          const oName = l.Nama_Obat || l.obat || '-';
+          const jenisVal = l.Jenis_Transaksi || l.jenis || '-';
+          const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
+          const badgeClass = jenisVal === 'masuk' ? 'badge-success' : 'badge-warning';
+          const badgeText = jenisVal === 'masuk' ? '↓ Masuk' : '↑ Keluar';
+          
+          let statusBadge = '';
+          if (l.status === 'Selesai') statusBadge = '<span class="badge badge-success">Selesai</span>';
+          else if (l.status === 'Pending') statusBadge = '<span class="badge badge-warning">Pending</span>';
+          else if (l.status === 'Dibatalkan') statusBadge = '<span class="badge badge-danger">Batal</span>';
+          else statusBadge = '<span class="badge badge-success">Selesai</span>';
+
+          return `
+            <tr>
+              <td style="font-family:monospace; font-size:12px; color:var(--text-muted)"><b>${l.ID_Transaksi || '-'}</b></td>
+              <td style="white-space:nowrap; font-size:13px">${l.Tanggal || l.timestamp?.split(' ')[0] || '-'}</td>
+              <td><b>${oName}</b></td>
+              <td><span class="badge ${badgeClass}">${badgeText}</span></td>
+              <td style="font-weight:600">${jlh}</td>
+              <td>${l.Nama_Pasien || '-'}</td>
+              <td>${l.Penyakit || '-'}</td>
+              <td>${l.Blok ? `${l.Blok} / Sel ${l.Sel || '-'}` : '-'}</td>
+              <td style="font-size:12px">${l.Petugas_Peresep || '-'}</td>
+              <td style="font-size:12px">${l.Petugas_Penyerah || '-'}</td>
+              <td style="font-size:12px; max-width:180px; overflow:hidden; text-overflow:ellipsis" title="${l.Keterangan || l.keterangan || ''}">${l.Keterangan || l.keterangan || '-'}</td>
+              <td>${statusBadge}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+};
+
+window.filterRiwayat = function() {
+  const pasienVal = (document.getElementById('histPasien')?.value || '').toLowerCase();
+  const obatVal = document.getElementById('histObat')?.value;
+  const penyakitVal = document.getElementById('histPenyakit')?.value;
+  const blokVal = document.getElementById('histBlok')?.value;
+  const petugasVal = document.getElementById('histPetugas')?.value;
+  const tanggalVal = document.getElementById('histTanggal')?.value;
+
+  let log = getData('log');
+
+  let filtered = log.filter(l => {
+    if (pasienVal) {
+      const pName = (l.Nama_Pasien || '').toLowerCase();
+      if (!pName.includes(pasienVal)) return false;
+    }
+    if (obatVal) {
+      const oName = l.Nama_Obat || l.obat;
+      if (oName !== obatVal) return false;
+    }
+    if (penyakitVal) {
+      if (l.Penyakit !== penyakitVal) return false;
+    }
+    if (blokVal) {
+      if (l.Blok !== blokVal) return false;
+    }
+    if (petugasVal) {
+      if (l.Petugas_Peresep !== petugasVal && l.Petugas_Penyerah !== petugasVal) return false;
+    }
+    if (tanggalVal) {
+      const lDate = l.Tanggal || l.timestamp?.split(' ')[0];
+      if (lDate !== tanggalVal) return false;
+    }
+    return true;
+  });
+
+  const wrap = document.getElementById('tabelRiwayatWrap');
+  if (wrap) {
+    wrap.innerHTML = renderTabelRiwayat(filtered);
+  }
+};
+
+window.resetRiwayatFilters = function() {
+  const pInput = document.getElementById('histPasien');
+  const oSelect = document.getElementById('histObat');
+  const dSelect = document.getElementById('histPenyakit');
+  const bSelect = document.getElementById('histBlok');
+  const stSelect = document.getElementById('histPetugas');
+  const tInput = document.getElementById('histTanggal');
+
+  if (pInput) pInput.value = '';
+  if (oSelect) oSelect.value = '';
+  if (dSelect) dSelect.value = '';
+  if (bSelect) bSelect.value = '';
+  if (stSelect) stSelect.value = '';
+  if (tInput) tInput.value = '';
+
+  filterRiwayat();
+};
+
 function renderLaporan() {
   const obat = getData('obat');
   const log = getData('log');
+
+  const obatDropdownOptions = [...new Set(log.map(l => l.Nama_Obat || l.obat))].map(o => `<option value="${o}">${o}</option>`).join('');
+  const penyakitDropdownOptions = [...new Set(log.map(l => l.Penyakit).filter(Boolean).filter(p => p !== '-'))].map(p => `<option value="${p}">${p}</option>`).join('');
+  const petugasDropdownOptions = [...new Set([
+    ...log.map(l => l.Petugas_Peresep),
+    ...log.map(l => l.Petugas_Penyerah)
+  ].filter(Boolean).filter(p => p !== '-'))].map(p => `<option value="${p}">${p}</option>`).join('');
 
   document.getElementById('page-container').innerHTML = `
     <div class="page-header">
@@ -2157,20 +2444,73 @@ function renderLaporan() {
       <div class="card-header">
         <div class="card-title"><i class="ph-fill ph-clock-clockwise"></i> Riwayat Transaksi</div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Obat</th><th>Jenis</th><th>Jumlah</th><th>Keterangan</th><th>Waktu</th></tr></thead>
-          <tbody>
-            ${[...log].reverse().map(l => `
-              <tr>
-                <td><b>${l.obat}</b></td>
-                <td><span class="badge ${l.jenis==='masuk'?'badge-success':'badge-warning'}">${l.jenis==='masuk'?'↓ Masuk':'↑ Keluar'}</span></td>
-                <td>${l.jumlah}</td>
-                <td>${l.keterangan}</td>
-                <td style="color:var(--text-muted);font-size:13px">${l.timestamp}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
+      
+      <!-- Panel Filter Riwayat -->
+      <div class="filters" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:15px; background:rgba(255,255,255,0.02); padding:15px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)">
+        <!-- Pencarian Nama Pasien -->
+        <div class="form-group" style="flex:1; min-width:200px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Cari Pasien</label>
+          <div class="search-bar" style="margin-top:4px">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="histPasien" placeholder="Nama pasien..." oninput="filterRiwayat()" />
+          </div>
+        </div>
+        
+        <!-- Filter Obat -->
+        <div class="form-group" style="width:180px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Obat</label>
+          <select class="form-control" id="histObat" onchange="filterRiwayat()" style="margin-top:4px">
+            <option value="">Semua Obat</option>
+            ${obatDropdownOptions}
+          </select>
+        </div>
+
+        <!-- Filter Penyakit -->
+        <div class="form-group" style="width:180px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Penyakit / Diagnosa</label>
+          <select class="form-control" id="histPenyakit" onchange="filterRiwayat()" style="margin-top:4px">
+            <option value="">Semua Penyakit</option>
+            ${penyakitDropdownOptions}
+          </select>
+        </div>
+
+        <!-- Filter Blok -->
+        <div class="form-group" style="width:140px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Blok Hunian</label>
+          <select class="form-control" id="histBlok" onchange="filterRiwayat()" style="margin-top:4px">
+            <option value="">Semua Blok</option>
+            <option value="Blok A">Blok A (Tipikor)</option>
+            <option value="Blok B">Blok B (Narkotika)</option>
+            <option value="Blok C">Blok C (Umum)</option>
+            <option value="Blok D">Blok D (Maksimum)</option>
+            <option value="Isolasi">Sel Isolasi</option>
+          </select>
+        </div>
+
+        <!-- Filter Petugas -->
+        <div class="form-group" style="width:180px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Petugas (Peresep/Penyerah)</label>
+          <select class="form-control" id="histPetugas" onchange="filterRiwayat()" style="margin-top:4px">
+            <option value="">Semua Petugas</option>
+            ${petugasDropdownOptions}
+          </select>
+        </div>
+
+        <!-- Filter Tanggal -->
+        <div class="form-group" style="width:160px; margin-bottom:0">
+          <label style="font-size:12px; color:var(--text-muted)">Tanggal Transaksi</label>
+          <input type="date" class="form-control" id="histTanggal" onchange="filterRiwayat()" style="margin-top:4px" />
+        </div>
+        
+        <!-- Reset Button -->
+        <div style="display:flex; align-items:end; margin-bottom:0">
+          <button class="btn btn-secondary" onclick="resetRiwayatFilters()" style="height:38px"><i class="ph ph-arrows-counter-clockwise"></i> Reset</button>
+        </div>
+      </div>
+
+      <!-- Tabel Riwayat Transaksi -->
+      <div class="table-wrap" id="tabelRiwayatWrap">
+        ${renderTabelRiwayat(log)}
       </div>
     </div>
   `;
