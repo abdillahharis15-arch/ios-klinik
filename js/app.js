@@ -46,6 +46,20 @@ function getProfil() {
 
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', () => {
+  // ── AUTO-CLEANUP DUMMY DATA LAMA ────────────────────────
+  // Membersihkan sisa data dummy yang masih nyangkut di localStorage browser
+  if (localStorage.getItem('ios_pegawai') && localStorage.getItem('ios_pegawai').includes('Ns. Hendra Wijaya')) {
+    localStorage.setItem('ios_pegawai', '[]');
+    console.log('[AUTO-CLEANUP] Data dummy pegawai lama berhasil dihapus.');
+  }
+  if (localStorage.getItem('ios_obat') && localStorage.getItem('ios_obat').includes('Amoxicillin 500mg')) {
+    localStorage.setItem('ios_obat', '[]');
+    console.log('[AUTO-CLEANUP] Data dummy obat lama berhasil dihapus.');
+  }
+  if (localStorage.getItem('ios_log') && localStorage.getItem('ios_log').includes('Paracetamol 500mg')) {
+    localStorage.setItem('ios_log', '[]');
+  }
+  // ──────────────────────────────────────────────────────────
   // ① Pulihkan URL jika kita datang dari 404.html redirect trick
   const spaRedirect = sessionStorage.getItem('ios_spa_redirect');
   if (spaRedirect) {
