@@ -322,9 +322,16 @@ const SyncManager = (() => {
         // Tambahkan item lokal yang TIDAK ada di remote (baru dibuat, belum di-push)
         localArr.forEach(localItem => {
           const id = String(localItem.id);
+          // Cek apakah item tidak ada di remote dan tidak sedang dalam antrean hapus
           if (!remoteMap.has(id) && !deletedIds.has(id)) {
-            console.log(`[IOS Sync] MERGE [${key}]: item id=${id} DITAMBAHKAN dari lokal (belum ada di Sheets)`);
-            merged.push(localItem);
+            // Jika item lokal tersebut ada di antrean "pending push", berarti ini data baru
+            if (pendingIds.has(id)) {
+              console.log(`[IOS Sync] MERGE [${key}]: item id=${id} DITAMBAHKAN dari lokal (pending push)`);
+              merged.push(localItem);
+            } else {
+              // Jika tidak ada di pending push, berarti data ini adalah DUMMY atau sudah dihapus di Sheets
+              console.log(`[IOS Sync] MERGE [${key}]: item id=${id} DIHAPUS dari lokal (tidak ada di Sheets)`);
+            }
           }
         });
 

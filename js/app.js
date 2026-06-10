@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ② Restore session login
   const savedUser = sessionStorage.getItem('ios_admin_user');
   if (savedUser) {
-    try { currentAdminUser = JSON.parse(savedUser); } catch(e) { currentAdminUser = null; }
+    try { currentAdminUser = JSON.parse(savedUser); } catch (e) { currentAdminUser = null; }
   }
 
   // ③ Pastikan currentRole sinkron dengan URL path
@@ -112,10 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const localPegawai = JSON.parse(localStorage.getItem('ios_pegawai') || '[]');
         console.log(`[IOS Init] Data lokal pegawai saat login: ${localPegawai.length} records`);
-        
+
         const pendingQueue = SyncManager.getQueue();
         console.log(`[IOS Init] Antrian pending: ${pendingQueue.length} item`);
-        
+
         // LANGKAH 1: Push dulu jika ada antrian
         if (pendingQueue.length > 0) {
           console.log('[IOS Init] AUTO-SYNC: Push data lokal ke Sheets terlebih dahulu...');
@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           console.warn('[IOS Init] AUTO-PULL FAILED:', pullResult.reason);
         }
-      } catch(e) {
+      } catch (e) {
         console.error('[IOS Init] AUTO-SYNC ERROR:', e);
         /* silent fail — tetap pakai data lokal */
       }
@@ -224,7 +224,7 @@ function _bgPush() {
 /// Klik tombol sync — jika ada antrian push, jika tidak pull
 async function handleSyncClick() {
   const q = SyncManager.getQueue();
-  
+
   if (currentRole === 'publik') {
     if (!localStorage.getItem('ios_gas_url')) {
       showToast('Aplikasi dalam mode Offline. Hubungi Admin untuk konfigurasi.', true);
@@ -480,7 +480,7 @@ function submitLogin() {
         const pwInput = document.getElementById('loginPassword');
         if (pwInput) { pwInput.value = ''; pwInput.focus(); }
       }
-    } catch(e) {
+    } catch (e) {
       errorMsg.textContent = 'Terjadi kesalahan sistem. Coba lagi.';
       errorDiv.style.display = 'flex';
       btn.disabled = false;
@@ -549,13 +549,13 @@ function _renderPage(page) {
 
   // Update judul topbar
   const titles = {
-    welcome:     'Home',
-    dashboard:   'Dashboard',
-    obat:        currentRole === 'admin' ? 'Manajemen Stok Obat' : 'Informasi Stok Obat',
-    pegawai:     currentRole === 'admin' ? 'Data Pegawai' : 'Staf Medis Klinik',
-    kesehatan:   'Informasi Kesehatan',
-    laporan:     'Laporan & Statistik',
-    pengaturan:  'Pengaturan',
+    welcome: 'Home',
+    dashboard: 'Dashboard',
+    obat: currentRole === 'admin' ? 'Manajemen Stok Obat' : 'Informasi Stok Obat',
+    pegawai: currentRole === 'admin' ? 'Data Pegawai' : 'Staf Medis Klinik',
+    kesehatan: 'Informasi Kesehatan',
+    laporan: 'Laporan & Statistik',
+    pengaturan: 'Pengaturan',
   };
   const titleEl = document.getElementById('page-title');
   if (titleEl) titleEl.textContent = titles[page] || 'IOS';
@@ -570,12 +570,12 @@ function _renderPage(page) {
 
   // Render page yang sesuai
   const pages = {
-    welcome:    renderWelcome,
-    dashboard:  renderDashboard,
-    obat:       renderObat,
-    pegawai:    renderPegawai,
-    kesehatan:  renderKesehatan,
-    laporan:    renderLaporan,
+    welcome: renderWelcome,
+    dashboard: renderDashboard,
+    obat: renderObat,
+    pegawai: renderPegawai,
+    kesehatan: renderKesehatan,
+    laporan: renderLaporan,
     pengaturan: renderPengaturan,
   };
 
@@ -668,8 +668,8 @@ document.addEventListener('click', e => {
   const s = document.getElementById('sidebar');
   const toggleBtn = document.getElementById('sidebarToggle');
   if (s && s.classList.contains('sidebar-open') &&
-      !s.contains(e.target) &&
-      (!toggleBtn || !toggleBtn.contains(e.target))) {
+    !s.contains(e.target) &&
+    (!toggleBtn || !toggleBtn.contains(e.target))) {
     s.classList.remove('sidebar-open');
     _closeSidebarBackdrop();
   }
@@ -700,22 +700,22 @@ document.addEventListener('click', e => {
 
 // ── REAL-TIME NOTIFICATION ENGINE ──────────────────────────────
 function renderNotif() {
-  const listEl  = document.getElementById('notifList');
+  const listEl = document.getElementById('notifList');
   const badgeEl = document.getElementById('notifBadge');
   if (!listEl) return;
 
   const obat = getData('obat');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const soon  = new Date(today); soon.setDate(soon.getDate() + 30);
+  const soon = new Date(today); soon.setDate(soon.getDate() + 30);
 
   const items = [];
 
   obat.forEach(o => {
-    const stok    = Number(o.stok) || 0;
+    const stok = Number(o.stok) || 0;
     const minStok = Number(o.minStok) || 20;
-    const nama    = o.nama || 'Obat Tidak Dikenal';
-    const satuan  = o.satuan || 'unit';
+    const nama = o.nama || 'Obat Tidak Dikenal';
+    const satuan = o.satuan || 'unit';
 
     // 🔴 Stok habis
     if (stok === 0) {
@@ -748,7 +748,7 @@ function renderNotif() {
             level: 'danger',
             icon: 'ph-fill ph-skull',
             title: nama,
-            msg: `Sudah <strong>EXPIRED</strong> sejak ${exp.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})}!`,
+            msg: `Sudah <strong>EXPIRED</strong> sejak ${exp.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}!`,
             sort: 0
           });
         } else if (exp <= soon) {
@@ -757,7 +757,7 @@ function renderNotif() {
             level: 'warning',
             icon: 'ph-fill ph-clock-countdown',
             title: nama,
-            msg: `Akan expired dalam <strong>${diffDays} hari</strong> (${exp.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})})`,
+            msg: `Akan expired dalam <strong>${diffDays} hari</strong> (${exp.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })})`,
             sort: 1
           });
         }
@@ -774,8 +774,8 @@ function renderNotif() {
     badgeEl.textContent = count > 99 ? '99+' : count;
     badgeEl.style.display = count > 0 ? 'flex' : 'none';
     badgeEl.style.background = items.some(i => i.sort === 0) ? 'var(--danger)' :
-                               items.some(i => i.level === 'danger') ? 'var(--danger)' :
-                               count > 0 ? '#f59e0b' : 'var(--danger)';
+      items.some(i => i.level === 'danger') ? 'var(--danger)' :
+        count > 0 ? '#f59e0b' : 'var(--danger)';
   }
 
   // Render list
@@ -1111,12 +1111,12 @@ function renderDashboard() {
           </thead>
           <tbody>
             ${getData('log').slice(-5).reverse().map(l => {
-              const oName = l.Nama_Obat || l.obat || '-';
-              const jenisVal = l.Jenis_Transaksi || l.jenis;
-              const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
-              const ket = l.Keterangan || l.keterangan || '-';
-              const time = l.Timestamp || l.timestamp || '-';
-              return `
+    const oName = l.Nama_Obat || l.obat || '-';
+    const jenisVal = l.Jenis_Transaksi || l.jenis;
+    const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
+    const ket = l.Keterangan || l.keterangan || '-';
+    const time = l.Timestamp || l.timestamp || '-';
+    return `
               <tr>
                 <td><b>${oName}</b></td>
                 <td><span class="badge ${jenisVal === 'masuk' ? 'badge-success' : 'badge-warning'}">${jenisVal === 'masuk' ? '↓ Masuk' : '↑ Keluar'}</span></td>
@@ -1124,7 +1124,7 @@ function renderDashboard() {
                 <td>${ket}</td>
                 <td style="color:var(--text-muted);font-size:13px">${time}</td>
               </tr>`;
-            }).join('')}
+  }).join('')}
           </tbody>
         </table>
       </div>
@@ -1181,7 +1181,7 @@ function renderDashboardCharts(obat) {
         datasets: [{
           label: 'Jumlah Obat',
           data: Object.values(kategoriCount),
-          backgroundColor: ['#0EA5E9','#10B981','#F59E0B','#EF4444','#6366F1','#EC4899','#8B5CF6'],
+          backgroundColor: ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#8B5CF6'],
           borderRadius: 8, borderSkipped: false
         }]
       },
@@ -1198,7 +1198,7 @@ function renderDashboardCharts(obat) {
       type: 'doughnut',
       data: {
         labels: ['Stok Aman', 'Stok Menipis', 'Stok Habis'],
-        datasets: [{ data: [aman, menipis, habis], backgroundColor: ['#10B981','#F59E0B','#EF4444'], borderWidth: 0, hoverOffset: 8 }]
+        datasets: [{ data: [aman, menipis, habis], backgroundColor: ['#10B981', '#F59E0B', '#EF4444'], borderWidth: 0, hoverOffset: 8 }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -1227,11 +1227,11 @@ function generateTxNumber() {
   return `TX-${year}${month}${date}-${hh}${mm}${ss}-${rand}`;
 }
 
-window.toggleTxFields = function() {
+window.toggleTxFields = function () {
   const jenis = document.getElementById('txJenis')?.value;
   const patientRow = document.getElementById('txPatientRow');
   if (!patientRow) return;
-  
+
   if (jenis === 'masuk') {
     patientRow.style.display = 'none';
     document.getElementById('txPasien').value = '';
@@ -1424,21 +1424,21 @@ function renderTabelObat(obat) {
         </thead>
         <tbody>
           ${obat.map((o, i) => {
-            let statusBadge = '';
-            if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
-            else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
-            else statusBadge = '<span class="badge badge-success">🟢 Aman</span>';
+      let statusBadge = '';
+      if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
+      else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
+      else statusBadge = '<span class="badge badge-success">🟢 Aman</span>';
 
-            let kontrolBadge = '<span style="color:var(--text-dim);font-size:12px">—</span>';
-            if (o.controlled && o.kategori === 'Terapi OAT') {
-              kontrolBadge = '<span class="badge-oat">OAT / PMO</span>';
-            } else if (o.controlled) {
-              kontrolBadge = '<span class="badge-controlled">⚠ Psikotropika</span>';
-            }
+      let kontrolBadge = '<span style="color:var(--text-dim);font-size:12px">—</span>';
+      if (o.controlled && o.kategori === 'Terapi OAT') {
+        kontrolBadge = '<span class="badge-oat">OAT / PMO</span>';
+      } else if (o.controlled) {
+        kontrolBadge = '<span class="badge-controlled">⚠ Psikotropika</span>';
+      }
 
-            return `
+      return `
               <tr class="${o.controlled ? 'row-controlled' : ''}">
-                <td style="color:var(--text-muted)">${i+1}</td>
+                <td style="color:var(--text-muted)">${i + 1}</td>
                 <td>
                   <b>${o.nama}</b>
                   ${o.keterangan ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px">${o.keterangan}</div>` : ''}
@@ -1460,7 +1460,7 @@ function renderTabelObat(obat) {
                   </div>
                 </td>
               </tr>`;
-          }).join('')}
+    }).join('')}
         </tbody>
       </table>
     `;
@@ -1480,14 +1480,14 @@ function renderTabelObat(obat) {
         </thead>
         <tbody>
           ${obat.map((o, i) => {
-            let statusBadge = '';
-            if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
-            else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
-            else statusBadge = '<span class="badge badge-success">🟢 Tersedia</span>';
+      let statusBadge = '';
+      if (o.stok === 0) statusBadge = '<span class="badge badge-danger">🔴 Habis</span>';
+      else if (o.stok < o.minStok) statusBadge = '<span class="badge badge-warning">🟡 Menipis</span>';
+      else statusBadge = '<span class="badge badge-success">🟢 Tersedia</span>';
 
-            return `
+      return `
               <tr>
-                <td style="color:var(--text-muted)">${i+1}</td>
+                <td style="color:var(--text-muted)">${i + 1}</td>
                 <td>
                   <b>${o.nama}</b>
                 </td>
@@ -1496,7 +1496,7 @@ function renderTabelObat(obat) {
                 <td style="font-weight:700;font-size:15px">${o.stok > 0 ? o.stok : 'Kosong'}</td>
                 <td>${statusBadge}</td>
               </tr>`;
-          }).join('')}
+    }).join('')}
         </tbody>
       </table>
     `;
@@ -1518,11 +1518,11 @@ function filterObat() {
 
 function showFormTambahObat(obatData = null) {
   const isEdit = !!obatData;
-  const today  = new Date().toISOString().split('T')[0];
-  const o = obatData || { nama:'', kategori:'', satuan:'', masuk:0, keluar:0, stok:0, minStok:20, expired:'', tanggalMasuk: today, tanggal: today };
+  const today = new Date().toISOString().split('T')[0];
+  const o = obatData || { nama: '', kategori: '', satuan: '', masuk: 0, keluar: 0, stok: 0, minStok: 20, expired: '', tanggalMasuk: today, tanggal: today };
   // Pastikan tanggalMasuk ada (data lama mungkin tidak punya field ini)
   if (!o.tanggalMasuk) o.tanggalMasuk = o.tanggal || today;
-  const defaultKategori = ['Antibiotik','Analgesik','Vitamin','Antasida','Antidiabetik','Lambung','Antihistamin','Bronkodilator','Psikotropika','OAT'];
+  const defaultKategori = ['Antibiotik', 'Analgesik', 'Vitamin', 'Antasida', 'Antidiabetik', 'Lambung', 'Antihistamin', 'Bronkodilator', 'Psikotropika', 'OAT'];
   const isCustomKat = o.kategori && !defaultKategori.includes(o.kategori);
   const selectedKat = isCustomKat ? 'Lainnya' : (o.kategori || 'Analgesik');
 
@@ -1536,7 +1536,7 @@ function showFormTambahObat(obatData = null) {
         <label>Kategori</label>
         <select class="form-control" id="fKat" onchange="toggleKatCustom()">
           ${[...defaultKategori, 'Lainnya'].map(k =>
-            `<option value="${k}" ${selectedKat===k?'selected':''}>${k}</option>`).join('')}
+    `<option value="${k}" ${selectedKat === k ? 'selected' : ''}>${k}</option>`).join('')}
         </select>
         <input class="form-control" id="fKatCustom"
           placeholder="Ketik nama kategori baru..."
@@ -1548,8 +1548,8 @@ function showFormTambahObat(obatData = null) {
       <div class="form-group">
         <label>Satuan</label>
         <select class="form-control" id="fSat">
-          ${['Strip','Box','Botol','Tablet','Kapsul','Ampul','Vial'].map(s =>
-            `<option value="${s}" ${o.satuan===s?'selected':''}>${s}</option>`).join('')}
+          ${['Strip', 'Box', 'Botol', 'Tablet', 'Kapsul', 'Ampul', 'Vial'].map(s =>
+      `<option value="${s}" ${o.satuan === s ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -1584,8 +1584,8 @@ function showFormTambahObat(obatData = null) {
 }
 
 // Tampilkan / sembunyikan field kategori custom saat pilih 'Lainnya'
-window.toggleKatCustom = function() {
-  const sel    = document.getElementById('fKat');
+window.toggleKatCustom = function () {
+  const sel = document.getElementById('fKat');
   const custom = document.getElementById('fKatCustom');
   if (!sel || !custom) return;
   if (sel.value === 'Lainnya') {
@@ -1598,15 +1598,15 @@ window.toggleKatCustom = function() {
 };
 
 function simpanObat(editId) {
-  const nama         = document.getElementById('fNama').value.trim();
-  const katSel       = document.getElementById('fKat').value;
-  const katCustom    = (document.getElementById('fKatCustom')?.value || '').trim();
-  const kat          = katSel === 'Lainnya' ? (katCustom || 'Lainnya') : katSel;
-  const sat          = document.getElementById('fSat').value;
-  const minStok      = parseInt(document.getElementById('fMinStok').value) || 0;
-  const masuk        = parseInt(document.getElementById('fMasuk').value) || 0;
-  const keluar       = parseInt(document.getElementById('fKeluar').value) || 0;
-  const exp          = document.getElementById('fExp').value;
+  const nama = document.getElementById('fNama').value.trim();
+  const katSel = document.getElementById('fKat').value;
+  const katCustom = (document.getElementById('fKatCustom')?.value || '').trim();
+  const kat = katSel === 'Lainnya' ? (katCustom || 'Lainnya') : katSel;
+  const sat = document.getElementById('fSat').value;
+  const minStok = parseInt(document.getElementById('fMinStok').value) || 0;
+  const masuk = parseInt(document.getElementById('fMasuk').value) || 0;
+  const keluar = parseInt(document.getElementById('fKeluar').value) || 0;
+  const exp = document.getElementById('fExp').value;
   const tanggalMasuk = document.getElementById('fTanggalMasuk').value || new Date().toISOString().split('T')[0];
 
   if (!nama) { showToast('Nama obat wajib diisi!', true); return; }
@@ -1622,11 +1622,11 @@ function simpanObat(editId) {
   let savedObat;
 
   if (editId) {
-    obat = obat.map(o => o.id === editId ? {...o, nama, kategori:kat, satuan:sat, minStok, masuk, keluar, stok, expired:exp, tanggalMasuk} : o);
+    obat = obat.map(o => o.id === editId ? { ...o, nama, kategori: kat, satuan: sat, minStok, masuk, keluar, stok, expired: exp, tanggalMasuk } : o);
     savedObat = obat.find(o => o.id === editId);
     showToast('✅ Data obat berhasil diperbarui!');
   } else {
-    savedObat = { id: getNextId(obat), nama, kategori:kat, satuan:sat, masuk, keluar, stok, minStok, expired:exp, tanggalMasuk, tanggal: tanggalMasuk };
+    savedObat = { id: getNextId(obat), nama, kategori: kat, satuan: sat, masuk, keluar, stok, minStok, expired: exp, tanggalMasuk, tanggal: tanggalMasuk };
     obat.push(savedObat);
     showToast('✅ Obat baru berhasil ditambahkan!');
   }
@@ -1676,7 +1676,7 @@ function simpanTransaksi() {
     blok = document.getElementById('txBlok').value;
     sel = document.getElementById('txSel').value.trim() || '-';
     peresep = document.getElementById('txPeresep').value;
-    
+
     if (pasien === '-' || pasien === '') {
       showToast('Nama Pasien wajib diisi untuk pengeluaran obat!', true);
       return;
@@ -1704,7 +1704,7 @@ function simpanTransaksi() {
 
   let log = getData('log');
   const now = new Date();
-  
+
   const formattedTimestamp = now.getFullYear() + '-' +
     String(now.getMonth() + 1).padStart(2, '0') + '-' +
     String(now.getDate()).padStart(2, '0') + ' ' +
@@ -1729,7 +1729,7 @@ function simpanTransaksi() {
     Timestamp: formattedTimestamp,
     status: status,
     obat: obat[idx].nama, jenis, jumlah,
-    timestamp: now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+    timestamp: now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     keterangan: obat[idx].controlled ? `⚠ TERKONTROL — ${ket}` : ket
   };
 
@@ -1831,7 +1831,7 @@ function filterPegawai() {
 
 function showFormTambahPegawai(pegawaiData = null) {
   const isEdit = !!pegawaiData;
-  const p = pegawaiData || { nama:'', jabatan:'Dokter Umum', spesialisasi:'', hp:'', email:'', jadwal:'', status:'Aktif', inisial:'', foto:'' };
+  const p = pegawaiData || { nama: '', jabatan: 'Dokter Umum', spesialisasi: '', hp: '', email: '', jadwal: '', status: 'Aktif', inisial: '', foto: '' };
   openModal(isEdit ? 'Edit Data Pegawai' : 'Tambah Pegawai Baru', `
     <div style="display:flex; justify-content:center; margin-bottom:20px; flex-direction:column; align-items:center; gap:10px">
       <input type="hidden" id="pFotoBase64" value="${p.foto || ''}">
@@ -1867,8 +1867,8 @@ function showFormTambahPegawai(pegawaiData = null) {
       <div class="form-group">
         <label>Jabatan</label>
         <select class="form-control" id="pJabatan">
-          ${['Dokter Spesialis','Dokter Umum','Perawat','Apoteker','Admin'].map(j =>
-            `<option value="${j}" ${p.jabatan===j?'selected':''}>${j}</option>`).join('')}
+          ${['Dokter Spesialis', 'Dokter Umum', 'Perawat', 'Apoteker', 'Admin'].map(j =>
+    `<option value="${j}" ${p.jabatan === j ? 'selected' : ''}>${j}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
@@ -1893,8 +1893,8 @@ function showFormTambahPegawai(pegawaiData = null) {
     <div class="form-group">
       <label>Status</label>
       <select class="form-control" id="pStatus">
-        <option value="Aktif" ${p.status==='Aktif'?'selected':''}>Aktif</option>
-        <option value="Izin" ${p.status==='Izin'?'selected':''}>Izin</option>
+        <option value="Aktif" ${p.status === 'Aktif' ? 'selected' : ''}>Aktif</option>
+        <option value="Izin" ${p.status === 'Izin' ? 'selected' : ''}>Izin</option>
       </select>
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="simpanPegawai(${isEdit ? p.id : 'null'})">
@@ -1908,10 +1908,10 @@ function handlePegawaiFotoUpload(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     // Open cropper with 1:1 aspect ratio, max width 150px, quality 0.7
     // Ukuran kecil ini wajib agar base64 tidak melebihi limit 50,000 karakter Google Sheets
-    openCropper(e.target.result, 1, 150, 0.7, function(croppedBase64) {
+    openCropper(e.target.result, 1, 150, 0.7, function (croppedBase64) {
       document.getElementById('pFotoBase64').value = croppedBase64;
       document.getElementById('pFotoPreview').src = croppedBase64;
       document.getElementById('pFotoPreview').style.display = 'block';
@@ -1937,7 +1937,7 @@ function simpanPegawai(editId) {
   let pegawai = getData('pegawai');
   let savedPegawai;
   if (editId) {
-    pegawai = pegawai.map(p => p.id === editId ? {...p, nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status, foto} : p);
+    pegawai = pegawai.map(p => p.id === editId ? { ...p, nama, inisial, jabatan, spesialisasi, hp, email, jadwal, status, foto } : p);
     savedPegawai = pegawai.find(p => p.id === editId);
     showToast('✅ Data pegawai berhasil diperbarui!');
   } else {
@@ -1973,7 +1973,7 @@ function renderKesehatan() {
   const kesehatan = getData('kesehatan');
   const kategoriSet = [...new Set(kesehatan.map(a => a.kategori))];
   const isHtmlAdmin = currentRole === 'admin';
-  
+
   document.getElementById('page-container').innerHTML = `
     <div class="page-header">
       <div>
@@ -2006,7 +2006,7 @@ function renderKartuArtikel(data) {
     const hasImage = a.image ? true : false;
     const imgStyle = hasImage ? `background: url('${a.image}') center/cover;` : `background: ${a.bg};`;
     const emojiHtml = hasImage ? '' : a.emoji;
-    
+
     const adminActions = isHtmlAdmin ? `
       <div class="artikel-card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:10" onclick="event.stopPropagation()">
         <button class="btn-icon" onclick="showFormArtikel(${a.id})" style="background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);color:white;border:none;border-radius:6px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Edit"><i class="ph ph-pencil-simple" style="font-size:16px"></i></button>
@@ -2043,8 +2043,8 @@ function showArtikel(id) {
   const kesehatan = getData('kesehatan');
   const a = kesehatan.find(x => x.id === id);
   if (!a) return;
-  
-  const headerHtml = a.image ? 
+
+  const headerHtml = a.image ?
     `<div style="width:100%;height:240px;border-radius:12px;background:url('${a.image}') center/cover;margin-bottom:16px;box-shadow:var(--shadow)"></div>` :
     `<div style="background:${a.bg};border-radius:12px;padding:35px;text-align:center;font-size:48px;margin-bottom:16px">${a.emoji}</div>`;
 
@@ -2222,22 +2222,22 @@ function hapusArtikel(id) {
   }
 }
 
-window.prosesUploadGambarArtikel = function(input) {
+window.prosesUploadGambarArtikel = function (input) {
   const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     // Open cropper with 16:9 aspect ratio, max width 400px, quality 0.7
     // Ukuran dibatasi agar tidak melebihi limit JSONP URL dan Google Sheets cell
-    openCropper(e.target.result, 16/9, 400, 0.7, function(croppedBase64) {
+    openCropper(e.target.result, 16 / 9, 400, 0.7, function (croppedBase64) {
       document.getElementById('artBase64Data').value = croppedBase64;
-      
+
       const preview = document.getElementById('artImagePreview');
       if (preview) {
         preview.src = croppedBase64;
         preview.style.display = 'block';
-        
+
         const fallbackPrev = document.getElementById('artFallbackPreview');
         if (fallbackPrev) fallbackPrev.style.display = 'none';
       }
@@ -2246,7 +2246,7 @@ window.prosesUploadGambarArtikel = function(input) {
   reader.readAsDataURL(file);
 };
 
-window.hapusGambarArtikelUploaded = function() {
+window.hapusGambarArtikelUploaded = function () {
   const preview = document.getElementById('artImagePreview');
   if (preview) {
     preview.src = '';
@@ -2254,7 +2254,7 @@ window.hapusGambarArtikelUploaded = function() {
   }
   const fallbackPrev = document.getElementById('artFallbackPreview');
   if (fallbackPrev) fallbackPrev.style.display = 'flex';
-  
+
   document.getElementById('artBase64Data').value = '';
   document.getElementById('artImageInput').value = '';
 };
@@ -2262,7 +2262,7 @@ window.hapusGambarArtikelUploaded = function() {
 // ============================================================
 // LAPORAN PAGE
 // ============================================================
-window.renderTabelRiwayat = function(logData) {
+window.renderTabelRiwayat = function (logData) {
   if (!logData.length) {
     return '<div class="empty-state"><i class="ph ph-clock"></i><p>Tidak ada riwayat transaksi yang cocok</p></div>';
   }
@@ -2287,19 +2287,19 @@ window.renderTabelRiwayat = function(logData) {
       </thead>
       <tbody>
         ${[...logData].reverse().map(l => {
-          const oName = l.Nama_Obat || l.obat || '-';
-          const jenisVal = l.Jenis_Transaksi || l.jenis || '-';
-          const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
-          const badgeClass = jenisVal === 'masuk' ? 'badge-success' : 'badge-warning';
-          const badgeText = jenisVal === 'masuk' ? '↓ Masuk' : '↑ Keluar';
-          
-          let statusBadge = '';
-          if (l.status === 'Selesai') statusBadge = '<span class="badge badge-success">Selesai</span>';
-          else if (l.status === 'Pending') statusBadge = '<span class="badge badge-warning">Pending</span>';
-          else if (l.status === 'Dibatalkan') statusBadge = '<span class="badge badge-danger">Batal</span>';
-          else statusBadge = '<span class="badge badge-success">Selesai</span>';
+    const oName = l.Nama_Obat || l.obat || '-';
+    const jenisVal = l.Jenis_Transaksi || l.jenis || '-';
+    const jlh = l.Jumlah !== undefined ? l.Jumlah : (l.jumlah !== undefined ? l.jumlah : 0);
+    const badgeClass = jenisVal === 'masuk' ? 'badge-success' : 'badge-warning';
+    const badgeText = jenisVal === 'masuk' ? '↓ Masuk' : '↑ Keluar';
 
-          return `
+    let statusBadge = '';
+    if (l.status === 'Selesai') statusBadge = '<span class="badge badge-success">Selesai</span>';
+    else if (l.status === 'Pending') statusBadge = '<span class="badge badge-warning">Pending</span>';
+    else if (l.status === 'Dibatalkan') statusBadge = '<span class="badge badge-danger">Batal</span>';
+    else statusBadge = '<span class="badge badge-success">Selesai</span>';
+
+    return `
             <tr>
               <td style="font-family:monospace; font-size:12px; color:var(--text-muted)"><b>${l.ID_Transaksi || '-'}</b></td>
               <td style="white-space:nowrap; font-size:13px">${l.Tanggal || l.timestamp?.split(' ')[0] || '-'}</td>
@@ -2315,13 +2315,13 @@ window.renderTabelRiwayat = function(logData) {
               <td>${statusBadge}</td>
             </tr>
           `;
-        }).join('')}
+  }).join('')}
       </tbody>
     </table>
   `;
 };
 
-window.filterRiwayat = function() {
+window.filterRiwayat = function () {
   const pasienVal = (document.getElementById('histPasien')?.value || '').toLowerCase();
   const obatVal = document.getElementById('histObat')?.value;
   const penyakitVal = document.getElementById('histPenyakit')?.value;
@@ -2362,7 +2362,7 @@ window.filterRiwayat = function() {
   }
 };
 
-window.resetRiwayatFilters = function() {
+window.resetRiwayatFilters = function () {
   const pInput = document.getElementById('histPasien');
   const oSelect = document.getElementById('histObat');
   const dSelect = document.getElementById('histPenyakit');
@@ -2519,13 +2519,13 @@ function renderLaporan() {
 }
 
 function renderLaporanCharts(obat) {
-  const top8 = [...obat].sort((a,b) => b.stok - a.stok).slice(0, 8);
+  const top8 = [...obat].sort((a, b) => b.stok - a.stok).slice(0, 8);
   const ctx1 = document.getElementById('lChartStok');
   if (ctx1) {
     charts.lStok = new Chart(ctx1, {
       type: 'bar',
       data: {
-        labels: top8.map(o => o.nama.length > 18 ? o.nama.substring(0,15)+'...' : o.nama),
+        labels: top8.map(o => o.nama.length > 18 ? o.nama.substring(0, 15) + '...' : o.nama),
         datasets: [{
           label: 'Sisa Stok', data: top8.map(o => o.stok),
           backgroundColor: top8.map(o => o.stok === 0 ? '#EF4444' : o.stok < o.minStok ? '#F59E0B' : '#10B981'),
@@ -2548,10 +2548,10 @@ function renderLaporanCharts(obat) {
     charts.lTx = new Chart(ctx2, {
       type: 'bar',
       data: {
-        labels: obat.slice(0,6).map(o => o.nama.length > 14 ? o.nama.substring(0,11)+'...' : o.nama),
+        labels: obat.slice(0, 6).map(o => o.nama.length > 14 ? o.nama.substring(0, 11) + '...' : o.nama),
         datasets: [
-          { label: 'Masuk', data: obat.slice(0,6).map(o => o.masuk), backgroundColor: '#10B981', borderRadius: 6, borderSkipped: false },
-          { label: 'Keluar', data: obat.slice(0,6).map(o => o.keluar), backgroundColor: '#F59E0B', borderRadius: 6, borderSkipped: false }
+          { label: 'Masuk', data: obat.slice(0, 6).map(o => o.masuk), backgroundColor: '#10B981', borderRadius: 6, borderSkipped: false },
+          { label: 'Keluar', data: obat.slice(0, 6).map(o => o.keluar), backgroundColor: '#F59E0B', borderRadius: 6, borderSkipped: false }
         ]
       },
       options: {
@@ -2574,8 +2574,8 @@ function renderPengaturan() {
   const meta = SyncManager.getMeta();
   const queue = SyncManager.getQueue();
   const syncStatus = SyncManager.getStatus();
-  const statusColor = { ONLINE:'var(--secondary)', OFFLINE:'var(--text-muted)', SYNCING:'var(--primary)', ERROR:'var(--danger)' };
-  const statusLabel = { ONLINE:'Tersinkronisasi ✅', OFFLINE:'Mode Lokal (Offline)', SYNCING:'Sedang Sinkronisasi...', ERROR:'Koneksi Gagal ❌' };
+  const statusColor = { ONLINE: 'var(--secondary)', OFFLINE: 'var(--text-muted)', SYNCING: 'var(--primary)', ERROR: 'var(--danger)' };
+  const statusLabel = { ONLINE: 'Tersinkronisasi ✅', OFFLINE: 'Mode Lokal (Offline)', SYNCING: 'Sedang Sinkronisasi...', ERROR: 'Koneksi Gagal ❌' };
 
   let profilArr = getData('profil');
   if (!profilArr.length) profilArr = [{ id: 1, nama: 'Klinik Pratama Lapas Kelas I Palembang', telepon: '(0711) 123-4567', alamat: 'Jl. Merdeka No. 123, Palembang, Sumatera Selatan', upt: 'Lapas Kelas I Palembang — Ditjenpas Kemenimipas' }];
@@ -2648,7 +2648,7 @@ function renderPengaturan() {
         <button class="btn btn-primary" onclick="simpanGasUrl()"><i class="ph ph-floppy-disk"></i> Simpan URL</button>
         <button class="btn btn-secondary" onclick="testKoneksi()"><i class="ph ph-wifi-high"></i> Test Koneksi</button>
         <button class="btn btn-success" onclick="handleSyncPull()"><i class="ph ph-cloud-arrow-down"></i> Pull dari Sheets</button>
-        <button class="btn btn-primary" onclick="handleSyncPush()" style="background:linear-gradient(135deg,#10B981,#0EA5E9)"><i class="ph ph-cloud-arrow-up"></i> Push ke Sheets ${queue.length > 0 ? '('+queue.length+' antrian)' : ''}</button>
+        <button class="btn btn-primary" onclick="handleSyncPush()" style="background:linear-gradient(135deg,#10B981,#0EA5E9)"><i class="ph ph-cloud-arrow-up"></i> Push ke Sheets ${queue.length > 0 ? '(' + queue.length + ' antrian)' : ''}</button>
       </div>
 
       <!-- Log Sinkronisasi -->
@@ -2667,7 +2667,7 @@ function renderPengaturan() {
         <i class="ph-fill ph-info"></i>
         Salin kode di bawah, buka <b>script.google.com</b>, tempel ke editor, hubungkan ke Spreadsheet Anda (Sheet: Obat, Pegawai, Log), lalu <b>Deploy &rarr; Web App</b>.
       </div>
-      <div class="gas-template-box" id="gasTemplateBox">${SyncManager.GAS_TEMPLATE.trim().replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <div class="gas-template-box" id="gasTemplateBox">${SyncManager.GAS_TEMPLATE.trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       <button class="btn btn-secondary" style="margin-top:12px" onclick="salinGasTemplate()">
         <i class="ph ph-copy"></i> Salin Kode Apps Script
       </button>
@@ -2734,7 +2734,7 @@ function renderAccountList() {
       ${accounts.map(a => `
         <div style="display:flex;align-items:center;gap:14px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
           <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:16px;flex-shrink:0">
-            ${a.nama.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
+            ${a.nama.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
           </div>
           <div style="flex:1">
             <div style="font-weight:600;font-size:14px">${a.nama}</div>
@@ -2798,15 +2798,15 @@ function toggleAkunPasswordVis() {
 function simpanAkun(id) {
   console.log('[Account] simpanAkun called — id:', id, '| type:', typeof id);
 
-  const nama     = (document.getElementById('akNama')?.value     || '').trim();
+  const nama = (document.getElementById('akNama')?.value || '').trim();
   const username = (document.getElementById('akUsername')?.value || '').trim();
-  const role     = (document.getElementById('akRole')?.value     || 'Admin').trim();
+  const role = (document.getElementById('akRole')?.value || 'Admin').trim();
   const password = (document.getElementById('akPassword')?.value || '').trim();
 
   // ── Validasi wajib ──
-  if (!nama)              { showToast('❌ Nama lengkap wajib diisi!', true); return; }
-  if (!username)          { showToast('❌ Username wajib diisi!', true); return; }
-  if (username.length < 3){ showToast('❌ Username minimal 3 karakter!', true); return; }
+  if (!nama) { showToast('❌ Nama lengkap wajib diisi!', true); return; }
+  if (!username) { showToast('❌ Username wajib diisi!', true); return; }
+  if (username.length < 3) { showToast('❌ Username minimal 3 karakter!', true); return; }
   if (!/^[a-zA-Z0-9_.]+$/.test(username)) {
     showToast('❌ Username hanya boleh huruf, angka, titik, dan underscore!', true);
     return;
@@ -2840,9 +2840,9 @@ function simpanAkun(id) {
         return;
       }
       // FIX: gunakan getNextId() dari data.js untuk ID yang aman
-      const newId   = getNextId(accounts);
-      const today   = new Date().toISOString().slice(0, 10);
-      const newAcc  = { id: newId, username, password, nama, role, createdAt: today };
+      const newId = getNextId(accounts);
+      const today = new Date().toISOString().slice(0, 10);
+      const newAcc = { id: newId, username, password, nama, role, createdAt: today };
 
       accounts.push(newAcc);
       saveData('accounts', accounts); // FIX: gunakan saveData helper
@@ -2861,9 +2861,9 @@ function simpanAkun(id) {
         return;
       }
 
-      accounts[idx].nama     = nama;
+      accounts[idx].nama = nama;
       accounts[idx].username = username;
-      accounts[idx].role     = role;
+      accounts[idx].role = role;
 
       if (password) {
         if (password.length < 6) {
@@ -2985,18 +2985,18 @@ function exportData() {
 
 async function pushSemuaData() {
   if (!confirm('Apakah Anda ingin mengunggah seluruh data lokal saat ini ke Google Sheets? Ini akan menimpa/memperbarui data di Google Sheets dengan data dari aplikasi Anda.')) return;
-  
+
   const obat = getData('obat');
   const pegawai = getData('pegawai');
   const log = getData('log');
-  
+
   showToast('🔄 Mempersiapkan data untuk diunggah...');
-  
+
   // Enqueue all
   obat.forEach(o => SyncManager.enqueue('obat', 'upsert', o));
   pegawai.forEach(p => SyncManager.enqueue('pegawai', 'upsert', p));
   log.forEach(l => SyncManager.enqueue('log', 'upsert', l));
-  
+
   showToast('🔄 Mengunggah data ke Google Sheets...');
   const r = await SyncManager.push();
   if (r.ok) {
@@ -3034,15 +3034,15 @@ async function pushSemuaData() {
   showToast('🔄 Mengupload semua data ke Google Sheets...');
 
   // Buat antrian dari semua data lokal
-  const obat      = JSON.parse(localStorage.getItem('ios_obat')      || '[]');
-  const pegawai   = JSON.parse(localStorage.getItem('ios_pegawai')   || '[]');
-  const log       = JSON.parse(localStorage.getItem('ios_log')       || '[]');
+  const obat = JSON.parse(localStorage.getItem('ios_obat') || '[]');
+  const pegawai = JSON.parse(localStorage.getItem('ios_pegawai') || '[]');
+  const log = JSON.parse(localStorage.getItem('ios_log') || '[]');
   const kesehatan = JSON.parse(localStorage.getItem('ios_kesehatan') || '[]');
 
   const queue = [
-    ...obat.map(d      => ({ table: 'obat',      action: 'upsert', payload: d })),
-    ...pegawai.map(d   => ({ table: 'pegawai',   action: 'upsert', payload: d })),
-    ...log.map(d       => ({ table: 'log',       action: 'upsert', payload: d })),
+    ...obat.map(d => ({ table: 'obat', action: 'upsert', payload: d })),
+    ...pegawai.map(d => ({ table: 'pegawai', action: 'upsert', payload: d })),
+    ...log.map(d => ({ table: 'log', action: 'upsert', payload: d })),
     ...kesehatan.map(d => ({ table: 'kesehatan', action: 'upsert', payload: d }))
   ];
 
@@ -3065,7 +3065,7 @@ async function pushSemuaData() {
 // ============================================================
 // PROFIL KLINIK HANDLER
 // ============================================================
-window.simpanProfilKlinik = function() {
+window.simpanProfilKlinik = function () {
   const nama = document.getElementById('kNama').value.trim();
   const telepon = document.getElementById('kTelp').value.trim();
   const alamat = document.getElementById('kAlamat').value.trim();
@@ -3078,13 +3078,13 @@ window.simpanProfilKlinik = function() {
 
   const newProfile = { id: 1, nama, telepon, alamat, upt };
   saveData('profil', [newProfile]);
-  
+
   // Sinkronisasi ke Google Sheets
   SyncManager.enqueue('profil', 'upsert', newProfile);
   _bgPush();
-  
+
   showToast('✅ Profil klinik berhasil disimpan secara permanen!');
-  
+
   // Update UI secara live jika dibutuhkan tanpa harus refresh
   setTimeout(() => {
     location.reload(); // Paksa refresh untuk mengupdate string publik
@@ -3102,7 +3102,7 @@ let cropperOutputQuality = 0.85;
 function openCropper(imageSrc, aspectRatio, outputWidth, outputQuality, onSave) {
   const overlay = document.getElementById('cropModalOverlay');
   const imgEl = document.getElementById('cropperImage');
-  
+
   if (!overlay || !imgEl) {
     console.error('Cropper elements not found in DOM');
     return;
@@ -3142,14 +3142,14 @@ function closeCropper() {
   }
 }
 
-window.saveCrop = function() {
+window.saveCrop = function () {
   if (!cropperInst) return;
   const canvas = cropperInst.getCroppedCanvas({
     width: cropperOutputWidth, // Ukuran maksimal agar muat di Google Sheets cell limit (<50k chars)
     imageSmoothingEnabled: true,
     imageSmoothingQuality: 'high',
   });
-  
+
   if (canvas) {
     // Gunakan kualitas kompresi JPEG dinamis (0.7 - 0.85) untuk optimasi ukuran
     const dataUrl = canvas.toDataURL('image/jpeg', cropperOutputQuality);
